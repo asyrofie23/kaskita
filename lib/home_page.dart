@@ -1,11 +1,8 @@
-import 'transaksi.dart'; // Import model baru
-import 'riwayat_page.dart'; // Import halaman riwayat baru
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // IMPORT PENTING: Untuk akses Firestore
+import 'riwayat_page.dart';
+import 'transaksi.dart';
 
-
-/// ==========================================
-/// 2. STATEFUL WIDGET UTAMA
-/// ==========================================
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -14,38 +11,17 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  /// --- CONTROLLER FORM ---
-  /// Digunakan untuk menangkap teks/angka yang diketik user di keyboard HP
+  // Controller untuk menangkap ketikan user
   final TextEditingController _judulController = TextEditingController();
   final TextEditingController _nominalController = TextEditingController();
 
-  /// --- STATE / VARIABLE DATA ---
-  /// _pilihanTabSekarang bertugas mencatat halaman mana yang lagi aktif (0 = Home, 1 = Riwayat, dst)
   int _pilihanTabSekarang = 0;
 
-  /// List data transaksi awal (default) sebelum ditambah user
-  List<Transaksi> listTransaksi = [
-    Transaksi(
-      judul: 'Freelance',
-      keterangan: 'kiriman',
-      nominal: 50000,
-      waktu: '12:22',
-      isPemasukan: true,
-    ),
-  ];
-
-  /// ==========================================
-  /// 3. LOGIKA MATEMATIKA & HELPER
-  /// ==========================================
-  
-  /// Fungsi cerdik untuk mengubah angka biasa jadi berformat titik (Contoh: 50000 -> 50.000)
-  /// Ini biar tampilan aplikasi kita sinkron dengan desain di image_d9d2da.png
+  /// --- HELPER FORMAT RUPIAH ---
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
     int count = 0;
-
-    // Looping mundur dari angka paling belakang untuk disisipkan titik tiap 3 digit
     for (int i = str.length - 1; i >= 0; i--) {
       hasil = str[i] + hasil;
       count++;
@@ -56,109 +32,112 @@ class _HomePageState extends State<HomePage> {
     return hasil;
   }
 
-  /// Menghitung sisa saldo bersih (Pemasukan dikurangi Pengeluaran)
-  int get totalSaldo {
-    int saldo = 0;
-    for (var trx in listTransaksi) {
-      if (trx.isPemasukan) {
-        saldo += trx.nominal;
-      } else {
-        saldo -= trx.nominal;
-      }
-    }
-    return saldo;
-  }
-
-  /// Menghitung total semua uang masuk
-  int get totalPemasukan {
-    return listTransaksi
-        .where((trx) => trx.isPemasukan)
-        .fold(0, (sum, trx) => sum + trx.nominal);
-  }
-
-  /// Menghitung total semua uang keluar
-  int get totalPengeluaran {
-    return listTransaksi
-        .where((trx) => !trx.isPemasukan)
-        .fold(0, (sum, trx) => sum + trx.nominal);
-  }
-
   @override
   void dispose() {
-    // Menghapus controller dari memori kalau halaman ditutup biar HP gak lemot
     _judulController.dispose();
     _nominalController.dispose();
     super.dispose();
   }
 
-  /// ==========================================
-  /// 4. BUILD UI UTAMA
-  /// ==========================================
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      /// TOMBOL PLUS (Floating Action Button)
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: const Color(0xFF1D4ED8),
-        shape: const CircleBorder(),
-        onPressed: () => _tampilFormTransaksi(context),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+    /// ==========================================
+    /// STREAMBUILDER: SENSOR UTAMA DATABASE
+    /// ==========================================
+    /// Widget ini memantau koleksi bernama 'transaksi' di Cloud Firestore.
+    /// .orderBy('tanggal', descending: true) membuat data terbaru selalu di atas.
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('transaksi')
+          .orderBy('tanggal', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        // 1. Tampilkan indikator loading kalau data dari cloud belum beres diambil
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
 
-      /// BOTTOM NAVIGATION BAR (Menu Bawah)
-      bottomNavigationBar: BottomAppBar(
-        shape: const CircularNotchedRectangle(),
-        notchMargin: 8.0,
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildBottomNavItem(Icons.home, 'Home', 0),
-              _buildBottomNavItem(Icons.list_alt, 'Riwayat', 1),
-              const SizedBox(width: 40), // Spasi kosong penahan tempat Tombol Plus
-              _buildBottomNavItem(Icons.pie_chart_outline, 'Anggaran', 2),
-              _buildBottomNavItem(Icons.person_outline, 'Profil', 3),
-            ],
+        // 2. Ambil semua dokumen dokumen transaksi dari database
+        final docs = snapshot.data?.docs ?? [];
+
+        // 3. Konversi data mentah dari Firestore menjadi List<Transaksi> agar bisa dibaca UI kita
+        List<Transaksi> listTransaksi = docs.map((doc) {
+          return Transaksi(
+            judul: doc['judul'] ?? '',
+            keterangan: doc['keterangan'] ?? '',
+            nominal: doc['nominal'] ?? 0,
+            waktu: doc['waktu'] ?? '',
+            isPemasukan: doc['isPemasukan'] ?? true,
+          );
+        }).toList();
+
+        // 4. Hitung matematika keuangan langsung dari data real-time database
+        int totalPemasukan = 0;
+        int totalPengeluaran = 0;
+        for (var trx in listTransaksi) {
+          if (trx.isPemasukan) {
+            totalPemasukan += trx.nominal;
+          } else {
+            totalPengeluaran += trx.nominal;
+          }
+        }
+        int totalSaldo = totalPemasukan - totalPengeluaran;
+
+        return Scaffold(
+          floatingActionButton: FloatingActionButton(
+            backgroundColor: const Color(0xFF1D4ED8),
+            shape: const CircleBorder(),
+            // Buka form tanpa parameter = Mode Tambah
+            onPressed: () => _tampilFormTransaksi(context), 
+            child: const Icon(Icons.add, color: Colors.white),
           ),
-        ),
-      ),
-
-      /// KONDISI PERALIHAN HALAMAN
-      /// Jika _pilihanTabSekarang berangka 0, munculkan konten Home asli.
-      /// Jika selain 0, tampilkan halaman tiruan sementara.
-      /// KONDISI PERALIHAN HALAMAN YANG BARU
-      body: _pilihanTabSekarang == 0
-          ? _buildKontenHalamanUtama()
-          : _pilihanTabSekarang == 1
-              ? RiwayatPage(
-                  semuaTransaksi: listTransaksi,
-                  onEditTransaksi: (index) {
-                    _tampilFormTransaksi(context, index: index);
-                  },
-                )
-              : Center(
-                  child: Text(
-                    'Halaman ${_pilihanTabSekarang == 2 ? "Anggaran" : "Profil"} Sementara',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                ),
+          floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          bottomNavigationBar: BottomAppBar(
+            shape: const CircularNotchedRectangle(),
+            notchMargin: 8.0,
+            color: Colors.white,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _buildBottomNavItem(Icons.home, 'Home', 0),
+                  _buildBottomNavItem(Icons.list_alt, 'Riwayat', 1),
+                  const SizedBox(width: 40),
+                  _buildBottomNavItem(Icons.pie_chart_outline, 'Anggaran', 2),
+                  _buildBottomNavItem(Icons.person_outline, 'Profil', 3),
+                ],
+              ),
+            ),
+          ),
+          body: _pilihanTabSekarang == 0
+              ? _buildKontenHalamanUtama(listTransaksi, totalSaldo, totalPemasukan, totalPengeluaran, docs)
+              : _pilihanTabSekarang == 1
+                  ? RiwayatPage(semuaTransaksi: listTransaksi)
+                  : Center(
+                      child: Text(
+                        'Halaman ${_pilihanTabSekarang == 2 ? "Anggaran" : "Profil"} Sementara',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+        );
+      },
     );
   }
 
   /// ==========================================
-  /// 5. KONTEN HALAMAN UTAMA (DASHBOARD)
+  /// DASHBOARD KONTEN UTAMA
   /// ==========================================
-  Widget _buildKontenHalamanUtama() {
+  Widget _buildKontenHalamanUtama(List<Transaksi> listTransaksi, int totalSaldo, int totalPemasukan, int totalPengeluaran, List<QueryDocumentSnapshot> docs) {
     return SafeArea(
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// 1. HEADER (Greeting)
+            // Header sapaan
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -174,7 +153,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 20),
 
-            /// 2. KARTU SALDO BIRU ELEGAN
+            // Kartu Saldo Biru
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -204,7 +183,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Menampilkan total saldo yang sudah diformat dengan titik ribuan
                   Text('Rp ${_formatUang(totalSaldo)}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 25),
                   Row(
@@ -219,7 +197,7 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 30),
 
-            /// 4. JUDUL TRANSAKSI
+            // Judul List Transaksi Terbaru
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: const [
@@ -229,73 +207,85 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 15),
 
-            /// 5. LIST TRANSAKSI YANG AKAN BERTAMBAH TERUS
-            /// Menggunakan ListView.builder agar hemat RAM saat merender baris data
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(), // Mematikan scroll internal list biar gak bentrok sama halaman utama
-              itemCount: listTransaksi.length,
-              itemBuilder: (context, index) {
-                final trx = listTransaksi[index];
-                return GestureDetector(
-                  onTap: () {
-                    _tampilFormTransaksi(context, index: index);
-                  },
-                  child: Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(15),
+            // Tampilkan tulisan jika database kosong melompong
+            listTransaksi.isEmpty
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 30),
+                      child: Text('Belum ada transaksi, bre. Yuk tambah!'),
                     ),
-                    child: Row(
-                      children: [
-                        // Lingkaran Icon (Hijau untuk Pemasukan, Merah untuk Pengeluaran)
-                        Container(
-                          padding: const EdgeInsets.all(12),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: listTransaksi.length,
+                    itemBuilder: (context, index) {
+                      final trx = listTransaksi[index];
+                      final docId = docs[index].id; // Mengambil ID unik dokumen dari Firebase untuk kebutuhan EDIT
+
+                      return GestureDetector(
+                        onTap: () {
+                          // Kirim parameter data ke form untuk "Mode Edit"
+                          _tampilFormTransaksi(
+                            context,
+                            docId: docId,
+                            judulAwal: trx.judul,
+                            nominalAwal: trx.nominal,
+                            isPemasukanAwal: trx.isPemasukan,
+                          );
+                        },
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(15),
                           decoration: BoxDecoration(
-                            color: trx.isPemasukan ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
-                            shape: BoxShape.circle,
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(15),
                           ),
-                          child: Icon(
-                            trx.isPemasukan ? Icons.attach_money : Icons.money_off,
-                            color: trx.isPemasukan ? Colors.green : Colors.red,
-                          ),
-                        ),
-                        const SizedBox(width: 15),
-                        // Teks Judul dan Keterangan
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Row(
                             children: [
-                              Text(trx.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                              const SizedBox(height: 4),
-                              Text(trx.keterangan, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                              Container(
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: trx.isPemasukan ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  trx.isPemasukan ? Icons.attach_money : Icons.money_off,
+                                  color: trx.isPemasukan ? Colors.green : Colors.red,
+                                ),
+                              ),
+                              const SizedBox(width: 15),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(trx.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                    const SizedBox(height: 4),
+                                    Text(trx.keterangan, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '${trx.isPemasukan ? "+" : "-"}Rp ${_formatUang(trx.nominal)}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      color: trx.isPemasukan ? Colors.green : Colors.red,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(trx.waktu, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                ],
+                              ),
                             ],
                           ),
                         ),
-                        // Teks Nominal Uang dan Jam
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '${trx.isPemasukan ? "+" : "-"}Rp ${_formatUang(trx.nominal)}',
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: trx.isPemasukan ? Colors.green : Colors.red,
-                                fontSize: 16,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(trx.waktu, style: const TextStyle(color: Colors.grey, fontSize: 12)),
-                          ],
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   ),
-                );
-              },
-            ),
           ],
         ),
       ),
@@ -303,20 +293,20 @@ class _HomePageState extends State<HomePage> {
   }
 
   /// ==========================================
-  /// 6. FORM INPUT BOTTOM SHEET (POP-UP BAWAH)
+  /// FORM TRANSAKSI FIRESTORE (TAMBAH & EDIT)
   /// ==========================================
-  void _tampilFormTransaksi(BuildContext context, {int? index}) {
-    final bool isEditMode = index != null;
+  void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal}) {
+    final bool isEditMode = docId != null;
 
     if (isEditMode) {
-      _judulController.text = listTransaksi[index].judul;
-      _nominalController.text = listTransaksi[index].nominal.toString();
+      _judulController.text = judulAwal!;
+      _nominalController.text = nominalAwal!.toString();
     } else {
       _judulController.clear();
       _nominalController.clear();
     }
 
-    bool isPemasukanTerpilih = isEditMode ? listTransaksi[index].isPemasukan : true;
+    bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
 
     showModalBottomSheet(
       context: context,
@@ -340,13 +330,11 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   Center(
                     child: Text(
-                      isEditMode ? 'Edit Transaksi' : 'Tambah Transaksi Baru',
+                      isEditMode ? 'Edit Catatan Kas' : 'Tambah Transaksi Baru',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
                     ),
                   ),
                   const SizedBox(height: 15),
-
-                  // PILIHAN TOMBOL PEMASUKAN / PENGELUARAN
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -370,7 +358,6 @@ class _HomePageState extends State<HomePage> {
                     ],
                   ),
                   const SizedBox(height: 15),
-
                   const Text('Nama Transaksi / Judul', style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   TextField(
@@ -381,12 +368,11 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(height: 15),
-
                   const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _nominalController,
-                    keyboardType: TextInputType.number, // Biar keyboard otomatis memunculkan angka saja
+                    keyboardType: TextInputType.number,
                     decoration: InputDecoration(
                       prefixText: 'Rp ',
                       hintText: '0',
@@ -394,8 +380,6 @@ class _HomePageState extends State<HomePage> {
                     ),
                   ),
                   const SizedBox(height: 25),
-
-                  // TOMBOL SIMPAN DATA
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -404,40 +388,39 @@ class _HomePageState extends State<HomePage> {
                         padding: const EdgeInsets.symmetric(vertical: 15),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                       ),
-                      onPressed: () {
-                        // Proteksi dasar: kalau inputan kosong, jangan dieksekusi
+                      onPressed: () async {
                         if (_judulController.text.isEmpty || _nominalController.text.isEmpty) {
                           return;
                         }
 
-                        // Memasukkan/mengupdate inputan user
-                        setState(() {
-                          if (isEditMode) {
-                            listTransaksi[index] = Transaksi(
-                              judul: _judulController.text,
-                              keterangan: isPemasukanTerpilih ? 'kiriman' : 'keperluan',
-                              nominal: int.parse(_nominalController.text),
-                              waktu: listTransaksi[index].waktu,
-                              isPemasukan: isPemasukanTerpilih,
-                            );
-                          } else {
-                            listTransaksi.add(
-                              Transaksi(
-                                judul: _judulController.text,
-                                keterangan: isPemasukanTerpilih ? 'kiriman' : 'keperluan',
-                                nominal: int.parse(_nominalController.text), 
-                                waktu: '${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
-                                isPemasukan: isPemasukanTerpilih,
-                              ),
-                            );
-                          }
-                        });
+                        // Wadah map data yang akan dikirim ke server Google Firebase
+                        final Map<String, dynamic> dataTransaksi = {
+                          'judul': _judulController.text,
+                          'keterangan': isPemasukanTerpilih ? 'kiriman' : 'keperluan',
+                          'nominal': int.parse(_nominalController.text),
+                          'isPemasukan': isPemasukanTerpilih,
+                          'waktu': '${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}',
+                        };
 
-                        // Mengosongkan form ketikan lagi agar pas dibuka berikutnya sudah bersih
+                        if (isEditMode) {
+                          /// PERINTAH FIRESTORE UNTUK UPDATE DATA
+                          await FirebaseFirestore.instance
+                              .collection('transaksi')
+                              .doc(docId)
+                              .update(dataTransaksi);
+                        } else {
+                          /// PERINTAH FIRESTORE UNTUK MENAMBAH DATA BARU
+                          // Tambahkan data timestamp waktu server buat pengurutan sorting otomatis
+                          dataTransaksi['tanggal'] = FieldValue.serverTimestamp();
+                          
+                          await FirebaseFirestore.instance
+                              .collection('transaksi')
+                              .add(dataTransaksi);
+                        }
+
                         _judulController.clear();
                         _nominalController.clear();
-
-                        Navigator.pop(context); // Menutup pop-up bottom sheet
+                        Navigator.pop(context);
                       },
                       child: Text(
                         isEditMode ? 'Simpan Perubahan' : 'Simpan Transaksi',
@@ -455,11 +438,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  /// ==========================================
-  /// 7. WIDGET REUSABLE HELPER (KOMPONEN PEMBANTU)
-  /// ==========================================
-  
-  // Widget kecil untuk menampilkan info rincian pemasukan & pengeluaran di dalam kartu biru
+  /// --- WIDGET REUSABLE NAVBAR & SALDO INFO ---
   Widget _buildSaldoInfo(IconData icon, String title, String amount, Color iconColor) {
     return Row(
       children: [
@@ -480,12 +459,9 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget kecil untuk menggambar item tombol pada Navigasi Menu Bawah
   Widget _buildBottomNavItem(IconData icon, String title, int indexTarget) {
     final bool isSelected = _pilihanTabSekarang == indexTarget;
-
     return GestureDetector(
-      behavior: HitTestBehavior.opaque,
       onTap: () {
         setState(() {
           _pilihanTabSekarang = indexTarget;
