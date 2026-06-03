@@ -84,9 +84,10 @@ class _HomePageState extends State<HomePage> {
           bottomNavigationBar: BottomAppBar(
             shape: const CircularNotchedRectangle(),
             notchMargin: 8.0,
-            color: cardColor, // Warnanya ngikutin tema
+            color: cardColor, 
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0),
+          
+              padding: const EdgeInsets.symmetric(horizontal: 10.0), 
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
