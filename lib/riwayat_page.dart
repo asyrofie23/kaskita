@@ -39,6 +39,10 @@ class _RiwayatPageState extends State<RiwayatPage> {
 
   @override
   Widget build(BuildContext context) {
+    /// --- DETEKSI TEMA SAAT INI ---
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+    Color cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+
     /// --- LOGIKA MENYARING (FILTER) DATA ---
     /// widget.semuaTransaksi artinya kita mengambil data yang dikirim dari class atasnya
     List<Transaksi> listYangDitampilkan = [];
@@ -53,11 +57,11 @@ class _RiwayatPageState extends State<RiwayatPage> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA),
       appBar: AppBar(
         title: const Text('Riwayat Kas', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        backgroundColor: cardColor,
+        foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
       ),
       body: Column(
@@ -68,11 +72,11 @@ class _RiwayatPageState extends State<RiwayatPage> {
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              _buildFilterButton('Semua'),
+              _buildFilterButton('Semua', isDark),
               const SizedBox(width: 10),
-              _buildFilterButton('Pemasukan'),
+              _buildFilterButton('Pemasukan', isDark),
               const SizedBox(width: 10),
-              _buildFilterButton('Pengeluaran'),
+              _buildFilterButton('Pengeluaran', isDark),
             ],
           ),
           const SizedBox(height: 15),
@@ -99,11 +103,11 @@ class _RiwayatPageState extends State<RiwayatPage> {
                           margin: const EdgeInsets.only(bottom: 12),
                           padding: const EdgeInsets.all(15),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: cardColor,
                             borderRadius: BorderRadius.circular(15),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.02),
+                                color: Colors.black.withOpacity(isDark ? 0.2 : 0.02),
                                 blurRadius: 5,
                                 offset: const Offset(0, 2),
                               )
@@ -114,7 +118,7 @@ class _RiwayatPageState extends State<RiwayatPage> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: trx.isPemasukan ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
+                                  color: trx.isPemasukan ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
@@ -161,14 +165,14 @@ class _RiwayatPageState extends State<RiwayatPage> {
   }
 
   /// Widget Helper buat bikin Tombol Filter gampang diklik
-  Widget _buildFilterButton(String namaFilter) {
+  Widget _buildFilterButton(String namaFilter, bool isDark) {
     final bool isSelected = _filterTerpilih == namaFilter;
     return ChoiceChip(
       label: Text(namaFilter),
       selected: isSelected,
       selectedColor: const Color(0xFF2563EB).withOpacity(0.15),
       labelStyle: TextStyle(
-        color: isSelected ? const Color(0xFF2563EB) : Colors.black87,
+        color: isSelected ? const Color(0xFF2563EB) : (isDark ? Colors.white70 : Colors.black87),
         fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
       onSelected: (bool selected) {
