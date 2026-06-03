@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "667148335739",
+    "project_id": "kaskita-c5844",
+    "storage_bucket": "kaskita-c5844.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:667148335739:android:556e55de5aa97b2f4240de",
+        "android_client_info": {
+          "package_name": "com.example.kaskita"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCGcuXnGNgtbLyoGmAmX1oDwcN2mJsLiTk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
