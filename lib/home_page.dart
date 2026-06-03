@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'riwayat_page.dart';
+import 'package:intl/intl.dart'; // PENTING: Untuk memformat tanggal dan waktu
 import 'transaksi.dart';
 import 'main.dart'; // WAJIB IMPORT INI: Untuk memanggil saklar themeNotifier
 
@@ -53,11 +54,21 @@ class _HomePageState extends State<HomePage> {
 
         final docs = snapshot.data?.docs ?? [];
         List<Transaksi> listTransaksi = docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>?;
+          String waktuTampil = doc['waktu'] ?? '';
+
+          if (data != null && data.containsKey('tanggal') && data['tanggal'] != null) {
+            final rawTanggal = data['tanggal'];
+            if (rawTanggal is Timestamp) {
+              waktuTampil = DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(rawTanggal.toDate());
+            }
+          }
+
           return Transaksi(
             judul: doc['judul'] ?? '',
             keterangan: doc['keterangan'] ?? '',
             nominal: doc['nominal'] ?? 0,
-            waktu: doc['waktu'] ?? '',
+            waktu: waktuTampil,
             isPemasukan: doc['isPemasukan'] ?? true,
           );
         }).toList();
@@ -86,7 +97,7 @@ class _HomePageState extends State<HomePage> {
             notchMargin: 8.0,
             color: cardColor, 
             child: Padding(
-          
+      
               padding: const EdgeInsets.symmetric(horizontal: 10.0), 
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -241,7 +252,20 @@ class _HomePageState extends State<HomePage> {
                           );
                         },
                         child: GestureDetector(
-                          onTap: () => _tampilFormTransaksi(context, docId: docId, judulAwal: trx.judul, nominalAwal: trx.nominal, isPemasukanAwal: trx.isPemasukan),
+                          onTap: () {
+                            final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
+                            final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
+                                ? rawTanggal.toDate() 
+                                : DateTime.now();
+                            _tampilFormTransaksi(
+                              context, 
+                              docId: docId, 
+                              judulAwal: trx.judul, 
+                              nominalAwal: trx.nominal, 
+                              isPemasukanAwal: trx.isPemasukan,
+                              tanggalAwal: initialDate,
+                            );
+                          },
                           child: Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(15),
@@ -298,7 +322,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal}) {
+  void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal}) {
     final bool isEditMode = docId != null;
 
     if (isEditMode) {
@@ -309,12 +333,14 @@ class _HomePageState extends State<HomePage> {
       _nominalController.clear();
     }
     bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
+    DateTime tanggalTerpilih = tanggalAwal ?? DateTime.now();
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return Padding(
@@ -341,6 +367,42 @@ class _HomePageState extends State<HomePage> {
                   const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   TextField(controller: _nominalController, keyboardType: TextInputType.number, decoration: InputDecoration(prefixText: 'Rp ', hintText: '0', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                  const SizedBox(height: 15),
+                  const Text('Tanggal Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  InkWell(
+                    onTap: () async {
+                      final DateTime? picked = await showDatePicker(
+                        context: context,
+                        initialDate: tanggalTerpilih,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2101),
+                        locale: const Locale('id', 'ID'),
+                      );
+                      if (picked != null && picked != tanggalTerpilih) {
+                        setSheetState(() {
+                          tanggalTerpilih = picked;
+                        });
+                      }
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: isDark ? Colors.white24 : Colors.grey.shade400),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(tanggalTerpilih),
+                            style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+                          ),
+                          const Icon(Icons.calendar_today, color: Colors.blue),
+                        ],
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 25),
                   SizedBox(
                     width: double.infinity,
@@ -348,12 +410,18 @@ class _HomePageState extends State<HomePage> {
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D4ED8), padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
                       onPressed: () async {
                         if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
-                        final dataTransaksi = {'judul': _judulController.text, 'keterangan': isPemasukanTerpilih ? 'kiriman' : 'keperluan', 'nominal': int.parse(_nominalController.text), 'isPemasukan': isPemasukanTerpilih, 'waktu': '${DateTime.now().hour}:${DateTime.now().minute.toString().padLeft(2, '0')}'};
+                        final dataTransaksi = {
+                          'judul': _judulController.text,
+                          'keterangan': isPemasukanTerpilih ? 'kiriman' : 'keperluan',
+                          'nominal': int.parse(_nominalController.text),
+                          'isPemasukan': isPemasukanTerpilih,
+                          'waktu': DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(tanggalTerpilih),
+                          'tanggal': Timestamp.fromDate(tanggalTerpilih),
+                        };
                         
                         if (isEditMode) {
                           await FirebaseFirestore.instance.collection('transaksi').doc(docId).update(dataTransaksi);
                         } else {
-                          dataTransaksi['tanggal'] = FieldValue.serverTimestamp();
                           await FirebaseFirestore.instance.collection('transaksi').add(dataTransaksi);
                         }
                         

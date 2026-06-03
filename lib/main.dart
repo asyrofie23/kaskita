@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
-import 'home_page.dart'; 
+import 'splash_screen.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 // 1. BUAT VARIABEL GLOBAL TEMA
 // Variabel ini bertindak sebagai "saklar" yang bisa diakses dari file mana saja
@@ -12,6 +14,7 @@ void main() async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  await initializeDateFormatting('id_ID', null);
   runApp(const MyApp());
 }
 
@@ -27,6 +30,16 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           title: 'KasKita',
           debugShowCheckedModeBanner: false,
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: const [
+            Locale('id', 'ID'),
+            Locale('en', 'US'),
+          ],
+          locale: const Locale('id', 'ID'),
           
           // SETTINGAN WARNA MODE TERANG (LIGHT)
           theme: ThemeData(
@@ -47,8 +60,7 @@ class MyApp extends StatelessWidget {
           
           // Terapkan mode sesuai posisi saklar
           themeMode: currentMode,
-          
-          home: const HomePage(),
+          home: const SplashScreen(),
         );
       },
     );
