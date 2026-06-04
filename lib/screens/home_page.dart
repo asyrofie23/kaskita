@@ -3,8 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'riwayat_page.dart';
 import 'package:intl/intl.dart'; // PENTING: Untuk memformat tanggal dan waktu
-import 'transaksi.dart';
-import 'main.dart'; // WAJIB IMPORT INI: Untuk memanggil saklar themeNotifier
+import '../models/transaksi.dart';
+import '../main.dart'; // WAJIB IMPORT INI: Untuk memanggil saklar themeNotifier
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -587,7 +587,9 @@ class _HomePageState extends State<HomePage> {
                         
                         _judulController.clear();
                         _nominalController.clear();
-                        Navigator.pop(context);
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                        }
                       },
                       child: Text(isEditMode ? 'Simpan Perubahan' : 'Simpan Transaksi', style: const TextStyle(color: Colors.white, fontSize: 16)),
                     ),
@@ -643,7 +645,9 @@ class _HomePageState extends State<HomePage> {
                   });
                   onKategoriDitambahkan(nama);
                 }
-                Navigator.pop(context);
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
               },
               child: const Text('Tambah', style: TextStyle(color: Colors.white)),
             ),

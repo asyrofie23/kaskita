@@ -1,8 +1,8 @@
 // =========================================================
-// FILE: lib/riwayat_page.dart
+// FILE: lib/screens/riwayat_page.dart
 // =========================================================
 import 'package:flutter/material.dart';
-import 'transaksi.dart'; // Import model transaksinya
+import '../models/transaksi.dart'; // Import model transaksinya
 
 class RiwayatPage extends StatefulWidget {
   // Kita minta kiriman data 'listTransaksi' dari home_page.dart lewat constructor ini

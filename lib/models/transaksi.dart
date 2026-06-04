@@ -1,5 +1,5 @@
 // =========================================================
-// FILE: lib/transaksi.dart
+// FILE: lib/models/transaksi.dart
 // =========================================================
 // File ini mandiri, gunanya cuma jadi cetakan data transaksi
 // supaya bisa dipakai di home_page.dart maupun riwayat_page.dart
