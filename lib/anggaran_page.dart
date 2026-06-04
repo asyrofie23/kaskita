@@ -171,6 +171,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
             return FloatingActionButton(
+              heroTag: null,
               backgroundColor: const Color(0xFF1D4ED8),
               onPressed: () => _tampilFormAnggaran(context, isDark),
               child: const Icon(Icons.add, color: Colors.white),

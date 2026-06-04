@@ -17,6 +17,16 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _judulController = TextEditingController();
   final TextEditingController _nominalController = TextEditingController();
   int _pilihanTabSekarang = 0;
+  late final Stream<QuerySnapshot> _transaksiStream;
+
+  @override
+  void initState() {
+    super.initState();
+    _transaksiStream = FirebaseFirestore.instance
+        .collection('transaksi')
+        .orderBy('tanggal', descending: true)
+        .snapshots();
+  }
 
   String _formatUang(int angka) {
     String str = angka.toString();
@@ -44,10 +54,7 @@ class _HomePageState extends State<HomePage> {
     Color cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('transaksi')
-          .orderBy('tanggal', descending: true)
-          .snapshots(),
+      stream: _transaksiStream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -88,12 +95,14 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           floatingActionButton: FloatingActionButton(
+            heroTag: null,
             backgroundColor: const Color(0xFF1D4ED8),
             shape: const CircleBorder(),
             onPressed: () => _tampilFormTransaksi(context),
             child: const Icon(Icons.add, color: Colors.white),
           ),
           floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+          floatingActionButtonAnimator: const NoAnimationFABAnimator(),
           bottomNavigationBar: BottomAppBar(
             shape: const CircularNotchedRectangle(),
             notchMargin: 8.0,
@@ -114,21 +123,30 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            reverseDuration: const Duration(milliseconds: 200),
-            switchInCurve: Curves.easeOutCubic,
-            switchOutCurve: Curves.easeInCubic,
+            duration: const Duration(milliseconds: 320),
+            reverseDuration: const Duration(milliseconds: 280),
             transitionBuilder: (Widget child, Animation<double> animation) {
-              return FadeTransition(
-                opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0.0, 0.02), // Geser tipis dari bawah
-                    end: Offset.zero,
-                  ).animate(animation),
+              final isEntering = child.key is ValueKey && (child.key as ValueKey).value == _pilihanTabSekarang;
+              
+              if (isEntering) {
+                return ScaleTransition(
+                  scale: Tween<double>(begin: 0.92, end: 1.0).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutBack,
+                    ),
+                  ),
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              } else {
+                return FadeTransition(
+                  opacity: animation,
                   child: child,
-                ),
-              );
+                );
+              }
             },
             // PENTING: Setiap halaman harus dibungkus Key agar AnimatedSwitcher tahu ada pergantian halaman
             child: _pilihanTabSekarang == 0
@@ -319,7 +337,7 @@ class _HomePageState extends State<HomePage> {
                                     shape: BoxShape.circle,
                                   ),
                                   child: Icon(
-                                    trx.isPemasukan ? Icons.attach_money : Icons.money_off,
+                                    trx.isPemasukan ? Icons.arrow_downward : Icons.arrow_upward,
                                     color: trx.isPemasukan ? Colors.green : Colors.red,
                                   ),
                                 ),
@@ -481,17 +499,28 @@ class _HomePageState extends State<HomePage> {
                             },
                           ),
                           const SizedBox(height: 4),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: () => _tampilDialogTambahKategori(context, isPemasukanTerpilih, (kategoriBaru) {
-                                setSheetState(() {
-                                  kategoriTerpilih = kategoriBaru;
-                                });
-                              }),
-                              icon: const Icon(Icons.add, size: 18),
-                              label: const Text('Tambah Kategori Baru', style: TextStyle(fontSize: 13)),
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              TextButton.icon(
+                                onPressed: () => _tampilBottomSheetKelolaKategori(context, isPemasukanTerpilih, (kategoriBaru) {
+                                  setSheetState(() {
+                                    kategoriTerpilih = kategoriBaru;
+                                  });
+                                }),
+                                icon: const Icon(Icons.settings_outlined, size: 18),
+                                label: const Text('Kelola Kategori', style: TextStyle(fontSize: 13)),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _tampilDialogTambahKategori(context, isPemasukanTerpilih, (kategoriBaru) {
+                                  setSheetState(() {
+                                    kategoriTerpilih = kategoriBaru;
+                                  });
+                                }),
+                                icon: const Icon(Icons.add, size: 18),
+                                label: const Text('Tambah Baru', style: TextStyle(fontSize: 13)),
+                              ),
+                            ],
                           ),
                         ],
                       );
@@ -624,6 +653,235 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  void _tampilBottomSheetKelolaKategori(
+      BuildContext context, bool isPemasukan, Function(String) onKategoriTerpilih) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
+        final Color sheetBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+        final Color textColor = isDark ? Colors.white : Colors.black87;
+
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: sheetBgColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: StreamBuilder<QuerySnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('kategori')
+                    .where('isPemasukan', isEqualTo: isPemasukan)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  final docs = snapshot.data?.docs ?? [];
+                  
+                  final customDocs = docs.where((doc) {
+                    final data = doc.data() as Map<String, dynamic>?;
+                    return data != null && data['nama'] != null;
+                  }).toList();
+
+                  // Sort custom categories alphabetically
+                  customDocs.sort((a, b) {
+                    final String nameA = (a['nama'] as String).toLowerCase();
+                    final String nameB = (b['nama'] as String).toLowerCase();
+                    return nameA.compareTo(nameB);
+                  });
+
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 10.0),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 15),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white24 : Colors.grey[300],
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        Text(
+                          isPemasukan ? 'Kelola Kategori Pemasukan' : 'Kelola Kategori Pengeluaran',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+                        ),
+                        const SizedBox(height: 10),
+                        const Text(
+                          'Kategori bawaan sistem tidak dapat diubah atau dihapus.',
+                          style: TextStyle(color: Colors.grey, fontSize: 12),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 15),
+                        Expanded(
+                          child: customDocs.isEmpty
+                              ? Center(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Icon(Icons.category_outlined, size: 60, color: Colors.grey.withOpacity(0.5)),
+                                      const SizedBox(height: 10),
+                                      Text(
+                                        'Belum ada kategori custom.',
+                                        style: TextStyle(color: Colors.grey[500]),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              : ListView.builder(
+                                  controller: scrollController,
+                                  itemCount: customDocs.length,
+                                  itemBuilder: (context, index) {
+                                    final doc = customDocs[index];
+                                    final docId = doc.id;
+                                    final String nama = doc['nama'];
+
+                                    return Container(
+                                      margin: const EdgeInsets.only(bottom: 8),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: ListTile(
+                                        title: Text(
+                                          nama,
+                                          style: TextStyle(color: textColor, fontWeight: FontWeight.w500),
+                                        ),
+                                        trailing: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            IconButton(
+                                              icon: const Icon(Icons.edit_outlined, color: Colors.blueAccent),
+                                              onPressed: () => _tampilDialogEditKategori(context, docId, nama),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                                              onPressed: () => _konfirmasiHapusKategori(context, docId, nama),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _tampilDialogEditKategori(BuildContext context, String docId, String namaLama) {
+    final TextEditingController controller = TextEditingController(text: namaLama);
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            'Edit Kategori',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'Nama kategori baru',
+              hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF1D4ED8),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final String namaBaru = controller.text.trim();
+                if (namaBaru.isNotEmpty && namaBaru != namaLama) {
+                  await FirebaseFirestore.instance
+                      .collection('kategori')
+                      .doc(docId)
+                      .update({'nama': namaBaru});
+                }
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Simpan', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _konfirmasiHapusKategori(BuildContext context, String docId, String nama) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            'Hapus Kategori?',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Apakah Anda yakin ingin menghapus kategori "$nama"? Transaksi lama dengan kategori ini tidak akan terpengaruh.',
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                await FirebaseFirestore.instance.collection('kategori').doc(docId).delete();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+              },
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildSaldoInfo(IconData icon, String title, String amount, Color iconColor) {
     return Row(
       children: [
@@ -647,5 +905,24 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+}
+
+class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
+  const NoAnimationFABAnimator();
+
+  @override
+  Offset getOffset({required Offset begin, required Offset end, required double progress}) {
+    return end;
+  }
+
+  @override
+  Animation<double> getRotationAnimation({required Animation<double> parent}) {
+    return const AlwaysStoppedAnimation(0.0);
+  }
+
+  @override
+  Animation<double> getScaleAnimation({required Animation<double> parent}) {
+    return const AlwaysStoppedAnimation(1.0);
   }
 }
