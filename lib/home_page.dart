@@ -67,6 +67,7 @@ class _HomePageState extends State<HomePage> {
           return Transaksi(
             judul: doc['judul'] ?? '',
             keterangan: doc['keterangan'] ?? '',
+            kategori: (data != null && data.containsKey('kategori')) ? doc['kategori'] : 'Lainnya',
             nominal: doc['nominal'] ?? 0,
             waktu: waktuTampil,
             isPemasukan: doc['isPemasukan'] ?? true,
@@ -264,6 +265,7 @@ class _HomePageState extends State<HomePage> {
                               nominalAwal: trx.nominal, 
                               isPemasukanAwal: trx.isPemasukan,
                               tanggalAwal: initialDate,
+                              kategoriAwal: trx.kategori,
                             );
                           },
                           child: Container(
@@ -294,7 +296,7 @@ class _HomePageState extends State<HomePage> {
                                     children: [
                                       Text(trx.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                       const SizedBox(height: 4),
-                                      Text(trx.keterangan, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                      Text(trx.kategori, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                     ],
                                   ),
                                 ),
@@ -322,7 +324,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal}) {
+  void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal, String? kategoriAwal}) {
     final bool isEditMode = docId != null;
 
     if (isEditMode) {
@@ -334,6 +336,7 @@ class _HomePageState extends State<HomePage> {
     }
     bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
     DateTime tanggalTerpilih = tanggalAwal ?? DateTime.now();
+    String kategoriTerpilih = kategoriAwal ?? 'Lainnya';
 
     showModalBottomSheet(
       context: context,
@@ -345,18 +348,39 @@ class _HomePageState extends State<HomePage> {
           builder: (context, setSheetState) {
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 20, right: 20, top: 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                   Center(child: Text(isEditMode ? 'Edit Catatan Kas' : 'Tambah Transaksi Baru', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
                   const SizedBox(height: 15),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      ChoiceChip(label: const Text('Pemasukan'), selected: isPemasukanTerpilih, selectedColor: Colors.greenAccent.withOpacity(0.3), onSelected: (val) => setSheetState(() => isPemasukanTerpilih = true)),
+                      ChoiceChip(
+                        label: const Text('Pemasukan'), 
+                        selected: isPemasukanTerpilih, 
+                        selectedColor: Colors.greenAccent.withOpacity(0.3), 
+                        onSelected: (val) {
+                          setSheetState(() {
+                            isPemasukanTerpilih = true;
+                            kategoriTerpilih = 'Gaji';
+                          });
+                        }
+                      ),
                       const SizedBox(width: 15),
-                      ChoiceChip(label: const Text('Pengeluaran'), selected: !isPemasukanTerpilih, selectedColor: Colors.redAccent.withOpacity(0.3), onSelected: (val) => setSheetState(() => isPemasukanTerpilih = false)),
+                      ChoiceChip(
+                        label: const Text('Pengeluaran'), 
+                        selected: !isPemasukanTerpilih, 
+                        selectedColor: Colors.redAccent.withOpacity(0.3), 
+                        onSelected: (val) {
+                          setSheetState(() {
+                            isPemasukanTerpilih = false;
+                            kategoriTerpilih = 'Makan';
+                          });
+                        }
+                      ),
                     ],
                   ),
                   const SizedBox(height: 15),
@@ -368,6 +392,78 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 8),
                   TextField(controller: _nominalController, keyboardType: TextInputType.number, decoration: InputDecoration(prefixText: 'Rp ', hintText: '0', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                   const SizedBox(height: 15),
+                  const Text('Kategori', style: TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance.collection('kategori').snapshots(),
+                    builder: (context, snapshot) {
+                      final List<String> defaultKategori = isPemasukanTerpilih
+                          ? ['Gaji', 'Freelance', 'Investasi', 'Hadiah', 'Lainnya']
+                          : ['Makan', 'Minum', 'Transportasi', 'Belanja', 'Hiburan', 'Lainnya'];
+
+                      List<String> listKategori = List.from(defaultKategori);
+
+                      if (snapshot.hasData) {
+                        for (var doc in snapshot.data!.docs) {
+                          final data = doc.data() as Map<String, dynamic>?;
+                          if (data != null &&
+                              data['isPemasukan'] == isPemasukanTerpilih &&
+                              data['nama'] != null) {
+                            final String nama = data['nama'];
+                            if (!listKategori.contains(nama)) {
+                              listKategori.add(nama);
+                            }
+                          }
+                        }
+                      }
+
+                      if (!listKategori.contains(kategoriTerpilih)) {
+                        kategoriTerpilih = listKategori.first;
+                      }
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          DropdownButtonFormField<String>(
+                            value: kategoriTerpilih,
+                            dropdownColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 16),
+                            decoration: InputDecoration(
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            items: listKategori.map((kat) {
+                              return DropdownMenuItem<String>(
+                                value: kat,
+                                child: Text(kat),
+                              );
+                            }).toList(),
+                            onChanged: (val) {
+                              if (val != null) {
+                                setSheetState(() {
+                                  kategoriTerpilih = val;
+                                });
+                              }
+                            },
+                          ),
+                          const SizedBox(height: 4),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => _tampilDialogTambahKategori(context, isPemasukanTerpilih, (kategoriBaru) {
+                                setSheetState(() {
+                                  kategoriTerpilih = kategoriBaru;
+                                });
+                              }),
+                              icon: const Icon(Icons.add, size: 18),
+                              label: const Text('Tambah Kategori Baru', style: TextStyle(fontSize: 13)),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 5),
                   const Text('Tanggal Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   InkWell(
@@ -415,6 +511,7 @@ class _HomePageState extends State<HomePage> {
                           'keterangan': isPemasukanTerpilih ? 'kiriman' : 'keperluan',
                           'nominal': int.parse(_nominalController.text),
                           'isPemasukan': isPemasukanTerpilih,
+                          'kategori': kategoriTerpilih,
                           'waktu': DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(tanggalTerpilih),
                           'tanggal': Timestamp.fromDate(tanggalTerpilih),
                         };
@@ -435,8 +532,59 @@ class _HomePageState extends State<HomePage> {
                   const SizedBox(height: 20),
                 ],
               ),
-            );
+            ),
+          );
           },
+        );
+      },
+    );
+  }
+
+  void _tampilDialogTambahKategori(BuildContext context, bool isPemasukan, Function(String) onKategoriDitambahkan) {
+    final TextEditingController kategoriController = TextEditingController();
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          title: Text(
+            isPemasukan ? 'Tambah Kategori Pemasukan' : 'Tambah Kategori Pengeluaran',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+          ),
+          content: TextField(
+            controller: kategoriController,
+            autofocus: true,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+            decoration: InputDecoration(
+              hintText: 'Nama kategori baru',
+              hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D4ED8)),
+              onPressed: () async {
+                final String nama = kategoriController.text.trim();
+                if (nama.isNotEmpty) {
+                  await FirebaseFirestore.instance.collection('kategori').add({
+                    'nama': nama,
+                    'isPemasukan': isPemasukan,
+                    'tanggal': FieldValue.serverTimestamp(),
+                  });
+                  onKategoriDitambahkan(nama);
+                }
+                Navigator.pop(context);
+              },
+              child: const Text('Tambah', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         );
       },
     );

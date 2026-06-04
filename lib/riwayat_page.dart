@@ -133,7 +133,7 @@ class _RiwayatPageState extends State<RiwayatPage> {
                                   children: [
                                     Text(trx.judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                                     const SizedBox(height: 4),
-                                    Text(trx.keterangan, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                                    Text(trx.kategori, style: const TextStyle(color: Colors.grey, fontSize: 12)),
                                   ],
                                 ),
                               ),
