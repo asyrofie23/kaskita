@@ -56,16 +56,23 @@ class _RiwayatPageState extends State<RiwayatPage> {
       listYangDitampilkan = widget.semuaTransaksi.where((trx) => !trx.isPemasukan).toList();
     }
 
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA),
-      appBar: AppBar(
-        title: const Text('Riwayat Kas', style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: cardColor,
-        foregroundColor: isDark ? Colors.white : Colors.black,
-        elevation: 0,
-      ),
-      body: Column(
+    return SafeArea(
+      child: Column(
         children: [
+          // CUSTOM HEADER UNTUK MENGGANTIKAN APPBAR
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 15.0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Riwayat Kas',
+                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                ),
+                Icon(Icons.history_toggle_off, color: isDark ? Colors.white70 : Colors.black54),
+              ],
+            ),
+          ),
           const SizedBox(height: 15),
 
           /// 1. TOMBOL-TOMBOL FILTER (ChoiceChip)

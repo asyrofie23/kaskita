@@ -1,3 +1,4 @@
+import 'anggaran_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'riwayat_page.dart';
@@ -112,16 +113,49 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          body: _pilihanTabSekarang == 0
-              ? _buildKontenHalamanUtama(listTransaksi, totalSaldo, totalPemasukan, totalPengeluaran, docs, isDark, cardColor)
+          body: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            reverseDuration: const Duration(milliseconds: 200),
+            switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
+            transitionBuilder: (Widget child, Animation<double> animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0.0, 0.02), // Geser tipis dari bawah
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            // PENTING: Setiap halaman harus dibungkus Key agar AnimatedSwitcher tahu ada pergantian halaman
+            child: _pilihanTabSekarang == 0
+                ? KeyedSubtree(
+                    key: const ValueKey(0),
+                    child: _buildKontenHalamanUtama(listTransaksi, totalSaldo, totalPemasukan, totalPengeluaran, docs, isDark, cardColor),
+                  )
               : _pilihanTabSekarang == 1
-                  ? RiwayatPage(semuaTransaksi: listTransaksi)
-                  : Center(
-                      child: Text(
-                        'Halaman ${_pilihanTabSekarang == 2 ? "Anggaran" : "Profil"} Sementara',
-                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                  ? KeyedSubtree(
+                      key: const ValueKey(1),
+                      child: RiwayatPage(semuaTransaksi: listTransaksi),
+                    )
+                  : _pilihanTabSekarang == 2 // KONDISI BARU UNTUK TAB ANGGARAN
+                      ? KeyedSubtree(
+                          key: const ValueKey(2),
+                          child: AnggaranPage(semuaTransaksi: listTransaksi),
+                        )
+                      : KeyedSubtree(
+                          key: ValueKey(_pilihanTabSekarang),
+                          child: const Center(
+                            child: Text(
+                              'Halaman Profil Sementara',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+          ),
         );
       },
     );
