@@ -145,15 +145,20 @@ class ProfilPage extends StatelessWidget {
                       }
 
                       // 4. Simpan ke Firestore di koleksi khusus 'grup_kas'
+                      String namaUser = user.displayName ?? user.email?.split('@')[0] ?? 'Admin';
+                      
                       await FirebaseFirestore.instance.collection('grup_kas').doc(kode).set({
                         'nama_grup': namaGrup,
                         'kode_undangan': kode,
                         'dibuat_pada': FieldValue.serverTimestamp(),
                         'admin_uid': user.uid,
                         'anggota': {
-                          user.uid: 'Admin' 
+                          user.uid: 'Admin'
                         },
-                        'id_anggota': [user.uid] // <--- TAMBAHAN BARU (Biar gampang dicari)
+                        'nama_anggota': { // <--- TAMBAHAN: Simpan nama
+                          user.uid: namaUser
+                        },
+                        'id_anggota': [user.uid]
                       });
 
                       if (context.mounted) {
@@ -236,10 +241,13 @@ class ProfilPage extends StatelessWidget {
                       final docSnap = await docRef.get();
 
                       if (docSnap.exists) {
-                        // 4. Grup ditemukan! Tambahkan UID user ke daftar anggota sebagai Editor
+                        // 4. Grup ditemukan! Tambahkan UID dan Nama user
+                        String namaUser = user.displayName ?? user.email?.split('@')[0] ?? 'Anggota';
+
                         await docRef.update({
                           'anggota.${user.uid}': 'Editor', 
-                          'id_anggota': FieldValue.arrayUnion([user.uid]) // <--- TAMBAHAN BARU
+                          'nama_anggota.${user.uid}': namaUser, // <--- TAMBAHAN: Simpan nama temenmu
+                          'id_anggota': FieldValue.arrayUnion([user.uid])
                         });
 
                         if (context.mounted) {
@@ -297,7 +305,7 @@ class ProfilPage extends StatelessWidget {
               // Nama Aplikasi & Versi
               Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 5),
-              const Text('Versi 1.2.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
+              const Text('Versi 1.3.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
               const SizedBox(height: 15),
               // Deskripsi
               Text(
