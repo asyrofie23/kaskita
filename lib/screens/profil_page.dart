@@ -272,6 +272,71 @@ class ProfilPage extends StatelessWidget {
     );
   }
 
+/// --- POP-UP TENTANG KASKITA ---
+  void _tampilDialogTentang(BuildContext context, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: const EdgeInsets.all(25),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Logo Aplikasi
+              Container(
+                padding: const EdgeInsets.all(15),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.account_balance_wallet, size: 50, color: Color(0xFF2563EB)),
+              ),
+              const SizedBox(height: 15),
+              // Nama Aplikasi & Versi
+              Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
+              const SizedBox(height: 5),
+              const Text('Versi 1.2.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
+              const SizedBox(height: 15),
+              // Deskripsi
+              Text(
+                'Aplikasi pencatatan keuangan pintar dengan fitur kolaborasi kas bersama secara real-time.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.black54, height: 1.5),
+              ),
+              const SizedBox(height: 20),
+              Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
+              const SizedBox(height: 10),
+              // Credit Developer
+              const Text('Dikembangkan oleh:', style: TextStyle(fontSize: 11, color: Colors.grey)),
+              const SizedBox(height: 5),
+              const Text(
+                'AHMAD RIFQI AL ASYROFI',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, letterSpacing: 1.2, color: Color(0xFF2563EB)),
+              ),
+              const Text('202369040078', style: TextStyle(fontWeight: FontWeight.bold,fontSize: 14,letterSpacing: 1.2, color: Colors.grey)),
+              const SizedBox(height: 5),
+          
+            ],
+          ),
+          actions: [
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF2563EB),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Tutup', style: TextStyle(color: Colors.white)),
+              ),
+            )
+          ],
+        );
+      },
+    );
+  }
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -383,7 +448,8 @@ class ProfilPage extends StatelessWidget {
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
                   _buildMenuTile(Icons.download_outlined, 'Ekspor Laporan (PDF/CSV)', 'Unduh riwayat transaksi', textColor, isDark, onTap: () {}),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
-                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.0.0', textColor, isDark, onTap: () {}),
+                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.1.0', textColor, isDark, onTap: () {
+                    _tampilDialogTentang(context, isDark);}),
                 ],
               ),
             ),

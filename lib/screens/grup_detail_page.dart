@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: lib/screens/grup_detail_page.dart
 // =========================================================
+import 'home_page.dart' show SlidableTile;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -64,7 +65,8 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           IconButton(
             icon: const Icon(Icons.group_outlined),
             onPressed: () {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Fitur Kelola Anggota coming soon!')));
+              // PANGGIL FUNGSI POP-UP DI SINI
+              _tampilDaftarAnggota(context);
             },
           )
         ],
@@ -150,7 +152,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: docs.length,
                     itemBuilder: (context, index) {
-                      final data = docs[index].data() as Map<String, dynamic>;
+                      final doc = docs[index];
+                      final docId = doc.id; // Ambil ID dokumen buat diedit/dihapus
+                      final data = doc.data() as Map<String, dynamic>;
                       final bool isPemasukan = data['isPemasukan'] ?? true;
                       final String judul = data['judul'] ?? '';
                       final int nominal = data['nominal'] ?? 0;
@@ -161,7 +165,8 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         waktuTampil = DateFormat('dd MMM yyyy, HH:mm').format((data['tanggal'] as Timestamp).toDate());
                       }
 
-                      return Container(
+                      // 1. Simpan UI Kotak Transaksi ke dalam variabel
+                      Widget kontenTransaksi = Container(
                         margin: const EdgeInsets.only(bottom: 10),
                         padding: const EdgeInsets.all(15),
                         decoration: BoxDecoration(
@@ -204,6 +209,32 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                           ],
                         ),
                       );
+
+                      // 2. Kalau jabatannya Admin/Editor, bungkus pakai fitur Swipe!
+                      if (bisaEdit) {
+                        // Ambil tanggal asli dari database buat dimasukkan ke form Edit
+                        DateTime tanggalAsli = DateTime.now();
+                        if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
+                          tanggalAsli = (data['tanggal'] as Timestamp).toDate();
+                        }
+
+                        return SlidableTile(
+                          key: Key(docId),
+                          onEdit: () => _tampilFormTransaksiGrup(
+                            context,
+                            docId: docId,
+                            judulAwal: judul,
+                            nominalAwal: nominal,
+                            isPemasukanAwal: isPemasukan,
+                            tanggalAwal: tanggalAsli, // <--- TAMBAHAN BARU: Kirim tanggal aslinya
+                          ),
+                          onDelete: () => _konfirmasiHapusTransaksiGrup(context, docId, judul),
+                          child: kontenTransaksi,
+                        );
+                      }
+
+                      // 3. Kalau cuma Spectator, kembalikan kotak biasa (nggak bisa di-swipe)
+                      return kontenTransaksi;
                     },
                   ),
               ],
@@ -231,17 +262,27 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
     );
   }
 
-  // --- FORM TAMBAH TRANSAKSI GRUP ---
-  void _tampilFormTransaksiGrup(BuildContext context) {
-    bool isPemasukanTerpilih = true;
-    _judulController.clear();
-    _nominalController.clear();
+
+  // --- FORM TAMBAH & EDIT TRANSAKSI GRUP ---
+  void _tampilFormTransaksiGrup(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal}) {
+    final bool isEditMode = docId != null;
+    bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
+    DateTime tanggalTerpilih = tanggalAwal ?? DateTime.now(); // <--- Variabel tanggal
+    
+    if (isEditMode) {
+      _judulController.text = judulAwal!;
+      _nominalController.text = nominalAwal!.toString();
+    } else {
+      _judulController.clear();
+      _nominalController.clear();
+    }
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) {
+        final bool isDark = Theme.of(context).brightness == Brightness.dark;
         return StatefulBuilder(
           builder: (context, setSheetState) {
             return Padding(
@@ -249,8 +290,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start, // Rata kiri biar rapi
                   children: [
-                    const Text('Tambah Transaksi Grup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    Center(child: Text(isEditMode ? 'Edit Transaksi Grup' : 'Tambah Transaksi Grup', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
                     const SizedBox(height: 15),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -271,9 +313,53 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                       ],
                     ),
                     const SizedBox(height: 15),
-                    TextField(controller: _judulController, decoration: InputDecoration(hintText: 'Judul (misal: Iuran Kas / Beli Galon)', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                    const Text('Judul Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    TextField(controller: _judulController, decoration: InputDecoration(hintText: 'Misal: Iuran Kas / Beli Galon', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                     const SizedBox(height: 15),
+                    const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
                     TextField(controller: _nominalController, keyboardType: TextInputType.number, decoration: InputDecoration(prefixText: 'Rp ', hintText: '0', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
+                    const SizedBox(height: 15),
+                    
+                    // --- UI KALENDER YANG SEMPAT HILANG ---
+                    const Text('Tanggal Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 8),
+                    InkWell(
+                      onTap: () async {
+                        final DateTime? picked = await showDatePicker(
+                          context: context,
+                          initialDate: tanggalTerpilih,
+                          firstDate: DateTime(2000),
+                          lastDate: DateTime(2101),
+                          locale: const Locale('id', 'ID'),
+                        );
+                        if (picked != null && picked != tanggalTerpilih) {
+                          setSheetState(() {
+                            tanggalTerpilih = picked;
+                          });
+                        }
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 15),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: isDark ? Colors.white24 : Colors.grey.shade400),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              DateFormat('EEEE, dd MMM yyyy', 'id_ID').format(tanggalTerpilih),
+                              style: TextStyle(fontSize: 16, color: isDark ? Colors.white : Colors.black87),
+                            ),
+                            const Icon(Icons.calendar_today, color: Colors.blue),
+                          ],
+                        ),
+                      ),
+                    ),
+                    // --- BATAS UI KALENDER ---
+
                     const SizedBox(height: 25),
                     SizedBox(
                       width: double.infinity,
@@ -282,22 +368,32 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         onPressed: () async {
                           if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
                           
-                          final user = FirebaseAuth.instance.currentUser;
-                          String namaPembuat = user?.displayName ?? user?.email?.split('@')[0] ?? 'Anggota';
+                          final grupRef = FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).collection('transaksi');
 
-                          // Simpan transaksi ke dalam folder grup
-                          await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).collection('transaksi').add({
-                            'judul': _judulController.text,
-                            'nominal': int.parse(_nominalController.text),
-                            'isPemasukan': isPemasukanTerpilih,
-                            'tanggal': FieldValue.serverTimestamp(),
-                            'uid_pembuat': user?.uid,
-                            'nama_pembuat': namaPembuat,
-                          });
+                          if (isEditMode) {
+                            await grupRef.doc(docId).update({
+                              'judul': _judulController.text,
+                              'nominal': int.parse(_nominalController.text),
+                              'isPemasukan': isPemasukanTerpilih,
+                              'tanggal': Timestamp.fromDate(tanggalTerpilih), // <--- UPDATE DATA TANGGAL
+                            });
+                          } else {
+                            final user = FirebaseAuth.instance.currentUser;
+                            String namaPembuat = user?.displayName ?? user?.email?.split('@')[0] ?? 'Anggota';
+                            
+                            await grupRef.add({
+                              'judul': _judulController.text,
+                              'nominal': int.parse(_nominalController.text),
+                              'isPemasukan': isPemasukanTerpilih,
+                              'tanggal': Timestamp.fromDate(tanggalTerpilih), // <--- SIMPAN DATA TANGGAL
+                              'uid_pembuat': user?.uid,
+                              'nama_pembuat': namaPembuat,
+                            });
+                          }
                           
                           if (context.mounted) Navigator.pop(context);
                         },
-                        child: const Text('Simpan Transaksi', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        child: Text(isEditMode ? 'Simpan Perubahan' : 'Simpan Transaksi', style: const TextStyle(color: Colors.white, fontSize: 16)),
                       ),
                     ),
                     const SizedBox(height: 20),
@@ -306,6 +402,212 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               ),
             );
           },
+        );
+      },
+    );
+  }
+
+  // --- POP-UP DAFTAR ANGGOTA GRUP ---
+  void _tampilDaftarAnggota(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+    final Color sheetBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final String myUid = FirebaseAuth.instance.currentUser?.uid ?? '';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: sheetBgColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: StreamBuilder<DocumentSnapshot>(
+            stream: FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final data = snapshot.data?.data() as Map<String, dynamic>?;
+              if (data == null || !data.containsKey('anggota')) {
+                return const Center(child: Text('Data anggota tidak ditemukan.'));
+              }
+
+              final Map<String, dynamic> anggotaMap = data['anggota'];
+              final String myRole = anggotaMap[myUid] ?? 'Anggota'; // Cek role diri sendiri
+              final bool isAdmin = myRole == 'Admin'; // Cek apakah aku admin
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40, height: 4,
+                      margin: const EdgeInsets.only(bottom: 15),
+                      decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                  const Text('Daftar Anggota Grup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  const SizedBox(height: 5),
+                  Text('Kode Undangan: ${widget.kodeGrup}', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                  if (isAdmin)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 8.0),
+                      child: Text('Ketuk nama anggota untuk mengubah perannya.', style: TextStyle(fontSize: 12, color: Colors.orange)),
+                    ),
+                  const SizedBox(height: 15),
+                  
+                  // LIST ANGGOTA
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: anggotaMap.length,
+                    itemBuilder: (context, index) {
+                      String uidAnggota = anggotaMap.keys.elementAt(index);
+                      String roleAnggota = anggotaMap[uidAnggota];
+                      bool isMe = uidAnggota == myUid;
+
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          backgroundColor: roleAnggota == 'Admin' 
+                              ? Colors.blueAccent.withOpacity(0.2) 
+                              : Colors.grey.withOpacity(0.2),
+                          child: Icon(
+                            roleAnggota == 'Admin' ? Icons.admin_panel_settings : Icons.person,
+                            color: roleAnggota == 'Admin' ? Colors.blueAccent : Colors.grey,
+                          ),
+                        ),
+                        title: Text(
+                          isMe ? 'Kamu' : 'Anggota Tim', 
+                          style: const TextStyle(fontWeight: FontWeight.bold)
+                        ),
+                        subtitle: Text(
+                          'ID: ${uidAnggota.substring(0, 8)}...', 
+                          style: const TextStyle(fontSize: 12, color: Colors.grey)
+                        ),
+                        trailing: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: roleAnggota == 'Admin' 
+                                ? Colors.blueAccent 
+                                : (roleAnggota == 'Editor' ? Colors.green : Colors.orange),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            roleAnggota, 
+                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)
+                          ),
+                        ),
+                        // KABEL UNTUK UBAH JABATAN (Hanya Admin yang bisa ketuk, dan nggak bisa ketuk diri sendiri)
+                        onTap: (isAdmin && !isMe) ? () {
+                          _tampilDialogUbahRole(context, uidAnggota, roleAnggota, isDark);
+                        } : null,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  // --- POP-UP UBAH PERAN ANGGOTA ---
+  void _tampilDialogUbahRole(BuildContext context, String uidTarget, String roleSekarang, bool isDark) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text('Ubah Peran Anggota', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_note, color: Colors.green),
+                title: Text('Editor', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Bisa menambah, mengedit, & menghapus transaksi.', style: TextStyle(fontSize: 12)),
+                trailing: roleSekarang == 'Editor' ? const Icon(Icons.check_circle, color: Colors.green) : null,
+                onTap: () async {
+                  Navigator.pop(context); // Tutup dialog
+                  await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
+                    'anggota.$uidTarget': 'Editor'
+                  });
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Peran diubah menjadi Editor', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
+                },
+              ),
+              Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
+              ListTile(
+                leading: const Icon(Icons.visibility, color: Colors.orange),
+                title: Text('Spectator', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+                subtitle: const Text('Hanya bisa melihat saldo dan riwayat.', style: TextStyle(fontSize: 12)),
+                trailing: roleSekarang == 'Spectator' ? const Icon(Icons.check_circle, color: Colors.orange) : null,
+                onTap: () async {
+                  Navigator.pop(context); // Tutup dialog
+                  await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
+                    'anggota.$uidTarget': 'Spectator'
+                  });
+                  if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Peran diubah menjadi Spectator', style: TextStyle(color: Colors.white)), backgroundColor: Colors.orange));
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // --- FUNGSI HAPUS TRANSAKSI GRUP ---
+  void _konfirmasiHapusTransaksiGrup(BuildContext context, String docId, String judul) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            'Hapus Transaksi?',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Yakin ingin menghapus "$judul" dari catatan bersama?',
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+              ),
+              onPressed: () async {
+                await FirebaseFirestore.instance
+                    .collection('grup_kas')
+                    .doc(widget.kodeGrup)
+                    .collection('transaksi')
+                    .doc(docId)
+                    .delete();
+                    
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaksi grup dihapus'), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
         );
       },
     );
