@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: lib/screens/profil_page.dart
 // =========================================================
+import 'grup_detail_page.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -88,12 +89,11 @@ class ProfilPage extends StatelessWidget {
   /// --- POP-UP BUAT CATATAN BERSAMA ---
   void _tampilDialogBuatCatatan(BuildContext context, bool isDark) {
     final TextEditingController namaGrupController = TextEditingController();
-    bool isLoading = false; // Buat muterin loading pas tombol diklik
+    bool isLoading = false;
 
     showDialog(
       context: context,
       builder: (context) {
-        // Pake StatefulBuilder biar kita bisa ubah state loading di dalam pop-up
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
@@ -151,8 +151,9 @@ class ProfilPage extends StatelessWidget {
                         'dibuat_pada': FieldValue.serverTimestamp(),
                         'admin_uid': user.uid,
                         'anggota': {
-                          user.uid: 'Admin' // Daftarkan UID pembuat sebagai Admin
-                        }
+                          user.uid: 'Admin' 
+                        },
+                        'id_anggota': [user.uid] // <--- TAMBAHAN BARU (Biar gampang dicari)
                       });
 
                       if (context.mounted) {
@@ -166,10 +167,102 @@ class ProfilPage extends StatelessWidget {
                       }
                     }
                   },
-                  // Ubah tampilan tombol jadi muter saat proses simpan
                   child: isLoading 
                     ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
                     : const Text('Buat Grup', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
+  }
+
+  /// --- POP-UP GABUNG CATATAN ---
+  void _tampilDialogGabungCatatan(BuildContext context, bool isDark) {
+    final TextEditingController kodeController = TextEditingController();
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text('Gabung Catatan', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Masukkan kode undangan dari Admin untuk bergabung ke dalam grup.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: kodeController,
+                    textAlign: TextAlign.center,
+                    textCapitalization: TextCapitalization.characters, // Biar otomatis huruf besar
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 20, letterSpacing: 2, fontWeight: FontWeight.bold),
+                    decoration: InputDecoration(
+                      hintText: 'KAS-XXXXX',
+                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54, fontWeight: FontWeight.normal, letterSpacing: 0),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  onPressed: isLoading ? null : () async {
+                    final String kode = kodeController.text.trim().toUpperCase();
+                    if (kode.isEmpty) return;
+
+                    // 1. Cek apakah user adalah tamu
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null || user.isAnonymous) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harus hubungkan ke Google dulu buat gabung grup!'), backgroundColor: Colors.red));
+                      Navigator.pop(context);
+                      return;
+                    }
+
+                    // 2. Nyalakan loading
+                    setDialogState(() => isLoading = true);
+
+                    try {
+                      // 3. Cari grup berdasarkan ID dokumen (kode undangan)
+                      final docRef = FirebaseFirestore.instance.collection('grup_kas').doc(kode);
+                      final docSnap = await docRef.get();
+
+                      if (docSnap.exists) {
+                        // 4. Grup ditemukan! Tambahkan UID user ke daftar anggota sebagai Editor
+                        await docRef.update({
+                          'anggota.${user.uid}': 'Editor', 
+                          'id_anggota': FieldValue.arrayUnion([user.uid]) // <--- TAMBAHAN BARU
+                        });
+
+                        if (context.mounted) {
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil bergabung ke grup!'), backgroundColor: Colors.green));
+                        }
+                      } else {
+                        // Grup tidak ditemukan
+                        setDialogState(() => isLoading = false);
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kode tidak valid atau grup tidak ditemukan.'), backgroundColor: Colors.red));
+                        }
+                      }
+                    } catch (e) {
+                      setDialogState(() => isLoading = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal bergabung: $e'), backgroundColor: Colors.red));
+                      }
+                    }
+                  },
+                  child: isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Gabung', style: TextStyle(color: Colors.white)),
                 ),
               ],
             );
@@ -255,8 +348,9 @@ class ProfilPage extends StatelessWidget {
               ),
               child: Column(
                 children: [
-                  // Yang ini biarin kosong dulu karena mesin gabungnya belum kita buat
-                  _buildMenuTile(Icons.group_add_outlined, 'Gabung Catatan via Kode', 'Masukkan kode undangan', textColor, isDark, onTap: () {}),
+                  _buildMenuTile(Icons.group_add_outlined, 'Gabung Catatan via Kode', 'Masukkan kode undangan', textColor, isDark, onTap: () {
+                    _tampilDialogGabungCatatan(context, isDark);
+                  }),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
                   
                   // COLOKIN MESINNYA DI SINI
@@ -266,6 +360,11 @@ class ProfilPage extends StatelessWidget {
                 ],
               ),
             ),
+            /// ==========================================
+            /// DAFTAR GRUP SAYA (TAMBAHAN BARU)
+            /// ==========================================
+
+            _buildDaftarGrupSaya(context, cardColor, textColor, isDark),
 
             /// ==========================================
             /// 3. PENGATURAN UMUM
@@ -425,6 +524,88 @@ class ProfilPage extends StatelessWidget {
       subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
       trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
       onTap: onTap,
+    );
+  }
+  /// --- TAMPILAN DAFTAR GRUP SAYA ---
+  Widget _buildDaftarGrupSaya(BuildContext context, Color cardColor, Color textColor, bool isDark) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) return const SizedBox.shrink(); // Sembunyikan kalau mode tamu
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Grup Saya', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
+        const SizedBox(height: 10),
+        StreamBuilder<QuerySnapshot>(
+          // Cari grup yang di dalam array 'id_anggota'-nya terdapat UID user saat ini
+          stream: FirebaseFirestore.instance
+              .collection('grup_kas')
+              .where('id_anggota', arrayContains: user.uid)
+              .snapshots(),
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final docs = snapshot.data?.docs ?? [];
+
+            if (docs.isEmpty) {
+              return Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(15)),
+                child: const Text('Belum ada grup. Buat atau gabung sekarang!', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              );
+            }
+
+            // Tampilkan list grup
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: docs.length,
+              itemBuilder: (context, index) {
+                final data = docs[index].data() as Map<String, dynamic>;
+                final namaGrup = data['nama_grup'] ?? 'Grup Tanpa Nama';
+                final kode = data['kode_undangan'] ?? '-';
+                final role = data['anggota'][user.uid] ?? 'Anggota';
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  decoration: BoxDecoration(
+                    color: cardColor,
+                    borderRadius: BorderRadius.circular(15),
+                    boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+                  ),
+                  child: ListTile(
+                    leading: CircleAvatar(
+                      backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                      child: const Icon(Icons.wallet, color: Color(0xFF2563EB)),
+                    ),
+                    title: Text(namaGrup, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                    subtitle: Text('Kode: $kode • Peran: $role', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                    
+                    onTap: () {
+                      // BUKA HALAMAN DETAIL GRUP
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => GrupDetailPage(
+                            kodeGrup: kode,
+                            namaGrup: namaGrup,
+                            roleUser: role,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 25),
+      ],
     );
   }
 }
