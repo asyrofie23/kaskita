@@ -1,11 +1,13 @@
 // =========================================================
 // FILE: lib/screens/profil_page.dart
 // =========================================================
+import 'dart:math';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import '../main.dart'; 
-import 'splash_screen.dart'; 
+import '../main.dart';
+import 'splash_screen.dart';
 
 class ProfilPage extends StatelessWidget {
   const ProfilPage({super.key});
@@ -81,6 +83,100 @@ class ProfilPage extends StatelessWidget {
         (route) => false,
       );
     }
+  }
+
+  /// --- POP-UP BUAT CATATAN BERSAMA ---
+  void _tampilDialogBuatCatatan(BuildContext context, bool isDark) {
+    final TextEditingController namaGrupController = TextEditingController();
+    bool isLoading = false; // Buat muterin loading pas tombol diklik
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        // Pake StatefulBuilder biar kita bisa ubah state loading di dalam pop-up
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text('Buat Catatan Bersama', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Kamu akan menjadi Admin. Silakan beri nama untuk grup catatan ini.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: namaGrupController,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: 'Misal: Kosan, Liburan Bali',
+                      hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  onPressed: isLoading ? null : () async {
+                    final String namaGrup = namaGrupController.text.trim();
+                    if (namaGrup.isEmpty) return;
+
+                    // 1. Cek apakah user adalah tamu
+                    final user = FirebaseAuth.instance.currentUser;
+                    if (user == null || user.isAnonymous) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harus hubungkan ke Google dulu buat bikin grup!'), backgroundColor: Colors.red));
+                      Navigator.pop(context);
+                      return;
+                    }
+
+                    // 2. Nyalakan loading
+                    setDialogState(() => isLoading = true);
+
+                    try {
+                      // 3. Generate Kode Acak (KAS-XXXXX)
+                      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                      final rnd = Random();
+                      String kode = 'KAS-';
+                      for (var i = 0; i < 5; i++) {
+                        kode += chars[rnd.nextInt(chars.length)];
+                      }
+
+                      // 4. Simpan ke Firestore di koleksi khusus 'grup_kas'
+                      await FirebaseFirestore.instance.collection('grup_kas').doc(kode).set({
+                        'nama_grup': namaGrup,
+                        'kode_undangan': kode,
+                        'dibuat_pada': FieldValue.serverTimestamp(),
+                        'admin_uid': user.uid,
+                        'anggota': {
+                          user.uid: 'Admin' // Daftarkan UID pembuat sebagai Admin
+                        }
+                      });
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Grup "$namaGrup" berhasil dibuat! Kode: $kode'), backgroundColor: Colors.green));
+                      }
+                    } catch (e) {
+                      setDialogState(() => isLoading = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal buat grup: $e'), backgroundColor: Colors.red));
+                      }
+                    }
+                  },
+                  // Ubah tampilan tombol jadi muter saat proses simpan
+                  child: isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Buat Grup', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
+    );
   }
 
   @override
@@ -159,13 +255,17 @@ class ProfilPage extends StatelessWidget {
               ),
               child: Column(
                 children: [
+                  // Yang ini biarin kosong dulu karena mesin gabungnya belum kita buat
                   _buildMenuTile(Icons.group_add_outlined, 'Gabung Catatan via Kode', 'Masukkan kode undangan', textColor, isDark, onTap: () {}),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
-                  _buildMenuTile(Icons.add_box_outlined, 'Buat Catatan Bersama', 'Jadi admin dan undang teman', textColor, isDark, onTap: () {}),
+                  
+                  // COLOKIN MESINNYA DI SINI
+                  _buildMenuTile(Icons.add_box_outlined, 'Buat Catatan Bersama', 'Jadi admin dan undang teman', textColor, isDark, onTap: () {
+                    _tampilDialogBuatCatatan(context, isDark);
+                  }),
                 ],
               ),
             ),
-            const SizedBox(height: 25),
 
             /// ==========================================
             /// 3. PENGATURAN UMUM
