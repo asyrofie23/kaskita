@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
@@ -33,13 +34,41 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     _controller.forward();
 
-    // Navigasi ke HomePage setelah 3 detik
-    Timer(const Duration(seconds: 3), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const HomePage()),
-      );
-    });
+    // Panggil fungsi cek KTP di balik layar
+    _siapkanAkunLaluPindah();
+  }
+
+  // Fungsi baru untuk cek status login & bikin akun Anonim
+  Future<void> _siapkanAkunLaluPindah() async {
+    try {
+      // Tunggu animasi splash screen minimal 3 detik biar estetik
+      await Future.delayed(const Duration(seconds: 3));
+
+      // Cek apakah user sudah punya akun (Google / Anonim)
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      // Kalau benar-benar belum punya, buatkan akun Tamu (Anonim) diam-diam
+      if (currentUser == null) {
+        await FirebaseAuth.instance.signInAnonymously();
+      }
+
+      // Setelah KTP siap, langsung pindah ke HomePage
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error saat menyiapkan akun tamu: $e');
+      // Tetap pindah ke HomePage walaupun error, biar user nggak stuck
+      if (mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
+      }
+    }
   }
 
   @override
@@ -122,8 +151,9 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
               ),
             ),
             // Loading Indikator di Bagian Bawah
+            // Loading Indikator di Bagian Bawah
             Positioned(
-              bottom: 60,
+              bottom: 40, // Agak diturunin dikit biar nggak terlalu mepet ke tengah
               child: Column(
                 children: [
                   SizedBox(
@@ -140,6 +170,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white.withOpacity(0.5),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // WATERMARK DEVELOPER
+                  Text(
+                    '@ahmed_asyrofie',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withOpacity(0.8), // Sengaja dibikin lebih terang dikit biar eye-catching
+                      letterSpacing: 1.5,
                     ),
                   ),
                 ],

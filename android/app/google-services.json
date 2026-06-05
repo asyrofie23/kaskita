@@ -12,7 +12,20 @@
           "package_name": "com.example.kaskita"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "667148335739-g4hg3rgrbun5r2cfe2nedq0cjaspkbgv.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.kaskita",
+            "certificate_hash": "49a28db18f4b80291c1bd21df26d2d86a39f3913"
+          }
+        },
+        {
+          "client_id": "667148335739-g1q65o4fdk136ku6st9n00854rncf8oi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyCGcuXnGNgtbLyoGmAmX1oDwcN2mJsLiTk"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "667148335739-g1q65o4fdk136ku6st9n00854rncf8oi.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "667148335739-6deevg4dmu7iavv1ottqvu8m8rtev2qa.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.kaskita"
+              }
+            }
+          ]
         }
       }
     }

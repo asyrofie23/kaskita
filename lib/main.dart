@@ -44,14 +44,14 @@ class MyApp extends StatelessWidget {
           // SETTINGAN WARNA MODE TERANG (LIGHT)
           theme: ThemeData(
             brightness: Brightness.light,
-            primarySwatch: Colors.blue,
+            primarySwatch: Colors.red,
             scaffoldBackgroundColor: const Color(0xFFF8F9FA), 
           ),
           
           // SETTINGAN WARNA MODE GELAP (DARK)
           darkTheme: ThemeData(
             brightness: Brightness.dark,
-            primarySwatch: Colors.blue,
+            primarySwatch: Colors.red,
             scaffoldBackgroundColor: const Color(0xFF121212), // Background jadi hitam
             bottomSheetTheme: const BottomSheetThemeData(
               backgroundColor: Color(0xFF1E1E1E), // Warna pop-up form jadi abu gelap

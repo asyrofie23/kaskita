@@ -1,6 +1,7 @@
 // =========================================================
 // FILE: lib/screens/anggaran_page.dart
 // =========================================================
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/transaksi.dart';
@@ -58,7 +59,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
         elevation: 0,
       ),
       body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('anggaran').snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest').collection('anggaran').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -167,7 +168,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
       ),
       // Tombol Plus Mengambang di kanan bawah
       floatingActionButton: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('anggaran').snapshots(),
+        stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).collection('anggaran').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.hasData && snapshot.data!.docs.isNotEmpty) {
             return FloatingActionButton(
@@ -334,7 +335,8 @@ class _AnggaranPageState extends State<AnggaranPage> {
                           if (namaController.text.isEmpty || limitController.text.isEmpty) return;
 
                           // Simpan ke Firestore
-                          await FirebaseFirestore.instance.collection('anggaran').add({
+                          final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                          await FirebaseFirestore.instance.collection('users').doc(uid).collection('anggaran').add({
                             'nama': namaController.text,
                             'limit': int.parse(limitController.text),
                             'kategori': kategoriTerpilih,

@@ -1,3 +1,5 @@
+import 'package:firebase_auth/firebase_auth.dart';
+import 'profil_page.dart';
 import 'anggaran_page.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -17,15 +19,10 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _judulController = TextEditingController();
   final TextEditingController _nominalController = TextEditingController();
   int _pilihanTabSekarang = 0;
-  late final Stream<QuerySnapshot> _transaksiStream;
 
   @override
   void initState() {
     super.initState();
-    _transaksiStream = FirebaseFirestore.instance
-        .collection('transaksi')
-        .orderBy('tanggal', descending: true)
-        .snapshots();
   }
 
   String _formatUang(int angka) {
@@ -54,11 +51,13 @@ class _HomePageState extends State<HomePage> {
     Color cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
 
     return StreamBuilder<QuerySnapshot>(
-      stream: _transaksiStream,
+      stream: FirebaseFirestore.instance
+          .collection('users')
+          .doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest')
+          .collection('transaksi')
+          .orderBy('tanggal', descending: true)
+          .snapshots(),
       builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
 
         final docs = snapshot.data?.docs ?? [];
         List<Transaksi> listTransaksi = docs.map((doc) {
@@ -164,14 +163,9 @@ class _HomePageState extends State<HomePage> {
                           key: const ValueKey(2),
                           child: AnggaranPage(semuaTransaksi: listTransaksi),
                         )
-                      : KeyedSubtree(
-                          key: ValueKey(_pilihanTabSekarang),
-                          child: const Center(
-                            child: Text(
-                              'Halaman Profil Sementara',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                            ),
-                          ),
+                      : const KeyedSubtree( // KONDISI TAB 3 (PROFIL)
+                          key: ValueKey(3),
+                          child: ProfilPage(),
                         ),
           ),
         );
@@ -180,7 +174,24 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _buildKontenHalamanUtama(List<Transaksi> listTransaksi, int totalSaldo, int totalPemasukan, int totalPengeluaran, List<QueryDocumentSnapshot> docs, bool isDark, Color cardColor) {
+    // LOGIKA SAPAAN YANG LEBIH PINTAR
+    final user = FirebaseAuth.instance.currentUser;
+    String namaSapaan = 'Pengguna Baru'; // Default kalau belum login
+    
+    if (user != null && !user.isAnonymous) {
+      if (user.displayName != null && user.displayName!.isNotEmpty) {
+        // Ambil kata pertama dari nama asli
+        namaSapaan = user.displayName!.split(' ')[0];
+      } else if (user.email != null && user .email!.isNotEmpty) {
+        // Kalau nama kosong, ambil potongan nama dari email sebelum tanda @
+        namaSapaan = user.email!.split('@')[0];
+      } else {
+        namaSapaan = 'Pengguna';
+      }
+    }
+
     return SafeArea(
+// ... [kode ke bawah tetap sama]
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Column(
@@ -194,7 +205,8 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text('Selamat datang,', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                    Text('Ahmed! 👋', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
+                    // 2. GANTI TEKS HARDCODE MENJADI VARIABEL namaSapaan
+                    Text('$namaSapaan! 👋', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20)),
                   ],
                 ),
                 Row(
@@ -284,26 +296,24 @@ class _HomePageState extends State<HomePage> {
                       final trx = listTransaksi[index];
                       final docId = docs[index].id;
 
-                      return Dismissible(
+                      return SlidableTile(
                         key: Key(docId),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          margin: const EdgeInsets.only(bottom: 10),
-                          decoration: BoxDecoration(color: Colors.redAccent, borderRadius: BorderRadius.circular(15)),
-                          child: const Icon(Icons.delete_sweep, color: Colors.white, size: 30),
-                        ),
-                        onDismissed: (direction) async {
-                          await FirebaseFirestore.instance.collection('transaksi').doc(docId).delete();
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${trx.judul} berhasil dihapus'),
-                              duration: const Duration(seconds: 2),
-                              behavior: SnackBarBehavior.floating,
-                            ),
+                        onEdit: () {
+                          final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
+                          final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
+                              ? rawTanggal.toDate() 
+                              : DateTime.now();
+                          _tampilFormTransaksi(
+                            context, 
+                            docId: docId, 
+                            judulAwal: trx.judul, 
+                            nominalAwal: trx.nominal, 
+                            isPemasukanAwal: trx.isPemasukan,
+                            tanggalAwal: initialDate,
+                            kategoriAwal: trx.kategori,
                           );
                         },
+                        onDelete: () => _konfirmasiHapusTransaksi(context, docId, trx.judul),
                         child: GestureDetector(
                           onTap: () {
                             final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
@@ -447,7 +457,11 @@ class _HomePageState extends State<HomePage> {
                   const Text('Kategori', style: TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
                   StreamBuilder<QuerySnapshot>(
-                    stream: FirebaseFirestore.instance.collection('kategori').snapshots(),
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest')
+                        .collection('kategori')
+                        .snapshots(),
                     builder: (context, snapshot) {
                       final List<String> defaultKategori = isPemasukanTerpilih
                           ? ['Gaji', 'Freelance', 'Investasi', 'Hadiah', 'Lainnya']
@@ -579,10 +593,13 @@ class _HomePageState extends State<HomePage> {
                           'tanggal': Timestamp.fromDate(tanggalTerpilih),
                         };
                         
+                        final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                        final userDoc = FirebaseFirestore.instance.collection('users').doc(uid);
+
                         if (isEditMode) {
-                          await FirebaseFirestore.instance.collection('transaksi').doc(docId).update(dataTransaksi);
+                          await userDoc.collection('transaksi').doc(docId).update(dataTransaksi);
                         } else {
-                          await FirebaseFirestore.instance.collection('transaksi').add(dataTransaksi);
+                          await userDoc.collection('transaksi').add(dataTransaksi);
                         }
                         
                         _judulController.clear();
@@ -638,7 +655,8 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 final String nama = kategoriController.text.trim();
                 if (nama.isNotEmpty) {
-                  await FirebaseFirestore.instance.collection('kategori').add({
+                  final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                  await FirebaseFirestore.instance.collection('users').doc(uid).collection('kategori').add({
                     'nama': nama,
                     'isPemasukan': isPemasukan,
                     'tanggal': FieldValue.serverTimestamp(),
@@ -681,6 +699,8 @@ class _HomePageState extends State<HomePage> {
               ),
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest')
                     .collection('kategori')
                     .where('isPemasukan', isEqualTo: isPemasukan)
                     .snapshots(),
@@ -828,7 +848,10 @@ class _HomePageState extends State<HomePage> {
               onPressed: () async {
                 final String namaBaru = controller.text.trim();
                 if (namaBaru.isNotEmpty && namaBaru != namaLama) {
+                  final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
                   await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
                       .collection('kategori')
                       .doc(docId)
                       .update({'nama': namaBaru});
@@ -873,9 +896,66 @@ class _HomePageState extends State<HomePage> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
               onPressed: () async {
-                await FirebaseFirestore.instance.collection('kategori').doc(docId).delete();
+                final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                await FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(uid)
+                    .collection('kategori')
+                    .doc(docId)
+                    .delete();
                 if (context.mounted) {
                   Navigator.pop(context);
+                }
+              },
+              child: const Text('Hapus', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _konfirmasiHapusTransaksi(BuildContext context, String docId, String judul) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text(
+            'Hapus Transaksi?',
+            style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold),
+          ),
+          content: Text(
+            'Apakah Anda yakin ingin menghapus transaksi "$judul"? Tindakan ini tidak dapat dibatalkan.',
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              onPressed: () async {
+                final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                await FirebaseFirestore.instance.collection('users').doc(uid).collection('transaksi').doc(docId).delete();
+                if (context.mounted) {
+                  Navigator.pop(context);
+                }
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('$judul berhasil dihapus'),
+                      duration: const Duration(seconds: 2),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
                 }
               },
               child: const Text('Hapus', style: TextStyle(color: Colors.white)),
@@ -928,5 +1008,172 @@ class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
   @override
   Animation<double> getScaleAnimation({required Animation<double> parent}) {
     return const AlwaysStoppedAnimation(1.0);
+  }
+}
+
+class SlidableTile extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const SlidableTile({
+    super.key,
+    required this.child,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  State<SlidableTile> createState() => _SlidableTileState();
+}
+
+class _SlidableTileState extends State<SlidableTile> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  double _dragExtent = 0.0;
+  final double _actionsWidth = 140.0; // Two buttons of 70 width each
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 250),
+    );
+    _controller.addListener(() {
+      setState(() {
+        _dragExtent = _controller.value * -_actionsWidth;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onHorizontalDragUpdate(DragUpdateDetails details) {
+    setState(() {
+      _dragExtent += details.primaryDelta!;
+      if (_dragExtent > 0) {
+        _dragExtent = 0;
+      } else if (_dragExtent < -_actionsWidth - 30) {
+        _dragExtent = -_actionsWidth - 30;
+      }
+    });
+  }
+
+  void _onHorizontalDragEnd(DragEndDetails details) {
+    final double dragPercent = (_dragExtent.abs() / _actionsWidth).clamp(0.0, 1.0);
+    _controller.value = dragPercent;
+
+    final double velocity = details.primaryVelocity ?? 0.0;
+    if (velocity < -300) {
+      _open();
+    } else if (velocity > 300) {
+      _close();
+    } else if (_dragExtent.abs() > _actionsWidth / 2) {
+      _open();
+    } else {
+      _close();
+    }
+  }
+
+  void _open() {
+    _controller.animateTo(1.0, curve: Curves.easeOut);
+  }
+
+  void _close() {
+    _controller.animateTo(0.0, curve: Curves.easeOut);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isOpen = _dragExtent.abs() > 10.0;
+
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 10),
+            decoration: BoxDecoration(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    _close();
+                    widget.onEdit();
+                  },
+                  child: Container(
+                    width: 70,
+                    height: double.infinity,
+                    color: const Color(0xFF2563EB),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.edit, color: Colors.white, size: 24),
+                        SizedBox(height: 4),
+                        Text(
+                          'Edit',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    _close();
+                    widget.onDelete();
+                  },
+                  child: Container(
+                    width: 70,
+                    height: double.infinity,
+                    color: const Color(0xFFEF4444),
+                    child: const Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.delete, color: Colors.white, size: 24),
+                        SizedBox(height: 4),
+                        Text(
+                          'Hapus',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        Transform.translate(
+          offset: Offset(_dragExtent, 0),
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate: _onHorizontalDragUpdate,
+            onHorizontalDragEnd: _onHorizontalDragEnd,
+            onTap: isOpen ? _close : null,
+            child: IgnorePointer(
+              ignoring: isOpen,
+              child: widget.child,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

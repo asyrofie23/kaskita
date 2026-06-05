@@ -57,22 +57,24 @@ class DefaultFirebaseOptions {
     projectId: 'kaskita-c5844',
     storageBucket: 'kaskita-c5844.firebasestorage.app',
   );
-
   static const FirebaseOptions ios = FirebaseOptions(
     apiKey: 'AIzaSyBBtQQ2xG79TY3g-MPp_XAXNOVcrt1lu18',
     appId: '1:667148335739:ios:af4096d321ebbec74240de',
     messagingSenderId: '667148335739',
     projectId: 'kaskita-c5844',
     storageBucket: 'kaskita-c5844.firebasestorage.app',
+    androidClientId: '667148335739-g4hg3rgrbun5r2cfe2nedq0cjaspkbgv.apps.googleusercontent.com',
+    iosClientId: '667148335739-6deevg4dmu7iavv1ottqvu8m8rtev2qa.apps.googleusercontent.com',
     iosBundleId: 'com.example.kaskita',
   );
-
   static const FirebaseOptions macos = FirebaseOptions(
     apiKey: 'AIzaSyBBtQQ2xG79TY3g-MPp_XAXNOVcrt1lu18',
     appId: '1:667148335739:ios:af4096d321ebbec74240de',
     messagingSenderId: '667148335739',
     projectId: 'kaskita-c5844',
     storageBucket: 'kaskita-c5844.firebasestorage.app',
+    androidClientId: '667148335739-g4hg3rgrbun5r2cfe2nedq0cjaspkbgv.apps.googleusercontent.com',
+    iosClientId: '667148335739-6deevg4dmu7iavv1ottqvu8m8rtev2qa.apps.googleusercontent.com',
     iosBundleId: 'com.example.kaskita',
   );
 

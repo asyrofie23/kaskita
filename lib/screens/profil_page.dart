@@ -1,0 +1,330 @@
+// =========================================================
+// FILE: lib/screens/profil_page.dart
+// =========================================================
+import 'package:flutter/material.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import '../main.dart'; 
+import 'splash_screen.dart'; 
+
+class ProfilPage extends StatelessWidget {
+  const ProfilPage({super.key});
+
+  /// --- FUNGSI LOGIN GOOGLE ---
+  Future<void> _loginGoogle(BuildContext context) async {
+    try {
+      await GoogleSignIn.instance.initialize();
+      final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
+      if (googleUser == null) return; 
+
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+
+      final authClient = googleUser.authorizationClient;
+      final clientAuth = await authClient.authorizeScopes(['email', 'profile']);
+      final String? accessToken = clientAuth.accessToken;
+
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      // Cek apakah user saat ini pakai akun Tamu (Anonim)
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      
+      if (currentUser != null && currentUser.isAnonymous) {
+        try {
+          // JURUS 1: Coba upgrade akun tamu menjadi akun Google
+          await currentUser.linkWithCredential(credential);
+          debugPrint("Berhasil menyambungkan akun Tamu ke Google!");
+        } on FirebaseAuthException catch (e) {
+          // Jika akun Google sudah pernah terdaftar sebelumnya
+          if (e.code == 'credential-already-in-use') {
+            debugPrint("Akun Google sudah ada, beralih ke login biasa...");
+            // JURUS 2: Hapus KTP Tamu, langsung login pakai Google yang sudah ada
+            await FirebaseAuth.instance.signInWithCredential(credential);
+          } else {
+            rethrow; // Lempar error lain kalau ada
+          }
+        }
+      } else {
+        // Kalau bukan tamu, login Google biasa
+        await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Berhasil Login!'), backgroundColor: Colors.green),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal Login: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  /// --- FUNGSI LOGOUT ---
+  Future<void> _logout(BuildContext context) async {
+    await GoogleSignIn.instance.signOut();
+    await FirebaseAuth.instance.signOut();
+    
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Berhasil Logout')),
+      );
+      // Tendang balik ke Splash Screen biar dapat KTP Tamu baru
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (context) => const SplashScreen()),
+        (route) => false,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    bool isDark = Theme.of(context).brightness == Brightness.dark;
+    Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA);
+    Color cardColor = isDark ? const Color(0xFF1E293B) : Colors.white;
+    Color textColor = isDark ? Colors.white : Colors.black87;
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      appBar: AppBar(
+        title: const Text('Profil & Pengaturan', style: TextStyle(fontWeight: FontWeight.bold)),
+        backgroundColor: bgColor,
+        foregroundColor: textColor,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orangeAccent : Colors.grey),
+            onPressed: () {
+              themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            /// ==========================================
+            /// 1. KARTU IDENTITAS (PANTAU STATUS LOGIN)
+            /// ==========================================
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+              ),
+              // StreamBuilder memantau perubahan status login secara real-time
+              child: StreamBuilder<User?>(
+                stream: FirebaseAuth.instance.authStateChanges(),
+                builder: (context, snapshot) {
+                  // Jika masih loading ngecek status
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  // Ambil data user
+                  final User? user = snapshot.data;
+
+                  // Jika user belum login, tampilkan tombol login
+                  if (user == null) {
+                    return _buildBelumLogin(context, textColor);
+                  }
+
+                  // Jika sudah login, tampilkan info profilnya
+                  return _buildSudahLogin(context, user, textColor, isDark);
+                },
+              ),
+            ),
+            const SizedBox(height: 25),
+
+            /// ==========================================
+            /// 2. MENU CATATAN BERSAMA
+            /// ==========================================
+            const Text('Catatan Bersama', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+              ),
+              child: Column(
+                children: [
+                  _buildMenuTile(Icons.group_add_outlined, 'Gabung Catatan via Kode', 'Masukkan kode undangan', textColor, isDark, onTap: () {}),
+                  Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
+                  _buildMenuTile(Icons.add_box_outlined, 'Buat Catatan Bersama', 'Jadi admin dan undang teman', textColor, isDark, onTap: () {}),
+                ],
+              ),
+            ),
+            const SizedBox(height: 25),
+
+            /// ==========================================
+            /// 3. PENGATURAN UMUM
+            /// ==========================================
+            const Text('Pengaturan Umum', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
+            const SizedBox(height: 10),
+            Container(
+              decoration: BoxDecoration(
+                color: cardColor,
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+              ),
+              child: Column(
+                children: [
+                  _buildMenuTile(Icons.notifications_outlined, 'Notifikasi', 'Atur pengingat anggaran', textColor, isDark, onTap: () {}),
+                  Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
+                  _buildMenuTile(Icons.download_outlined, 'Ekspor Laporan (PDF/CSV)', 'Unduh riwayat transaksi', textColor, isDark, onTap: () {}),
+                  Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
+                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.0.0', textColor, isDark, onTap: () {}),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// TAMPILAN JIKA BELUM LOGIN
+  Widget _buildBelumLogin(BuildContext context, Color textColor) {
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: Colors.grey.shade300,
+          child: const Icon(Icons.person, size: 50, color: Colors.white),
+        ),
+        const SizedBox(height: 15),
+        Text('Belum Login', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor)),
+        const SizedBox(height: 5),
+        const Text('Login untuk akses fitur Catatan Bersama', style: TextStyle(color: Colors.grey, fontSize: 12)),
+        const SizedBox(height: 20),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Colors.black87,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(color: Colors.grey.shade300),
+              ),
+            ),
+            // Pakai icon bawaan internet biar cepat
+            icon: Image.network('https://cdn-icons-png.flaticon.com/512/300/300221.png', height: 20), 
+            label: const Text('Login dengan Google', style: TextStyle(fontWeight: FontWeight.bold)),
+            onPressed: () => _loginGoogle(context), // PANGGIL FUNGSI LOGIN
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSudahLogin(BuildContext context, User user, Color textColor, bool isDark) {
+    bool isGuest = user.isAnonymous;
+    
+    // Tentukan nama yang akan ditampilkan
+    String namaTampil = 'Pengguna';
+    if (isGuest) {
+      namaTampil = 'Akun Tamu (Guest Mode)';
+    } else if (user.displayName != null && user.displayName!.isNotEmpty) {
+      namaTampil = user.displayName!;
+    } else if (user.email != null && user.email!.isNotEmpty) {
+      namaTampil = user.email!.split('@')[0]; // Ambil dari email
+    }
+    return Column(
+      children: [
+        CircleAvatar(
+          radius: 40,
+          backgroundColor: Colors.grey.shade300,
+          backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
+          child: user.photoURL == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
+        ),
+        const SizedBox(height: 15),
+        // GANTI BAGIAN TEKS NAMA INI
+        Text(
+          namaTampil,
+          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+        ),
+        const SizedBox(height: 5),
+        // Ambil email dari akun Google/Tamu
+        Text(
+          isGuest ? 'Data disimpan lokal di perangkat ini' : (user.email ?? '-'),
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+        if (isGuest) ...[
+          const SizedBox(height: 15),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF2563EB),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: Image.network(
+                'https://cdn-icons-png.flaticon.com/512/300/300221.png',
+                height: 20,
+                errorBuilder: (context, error, stackTrace) => const Icon(Icons.link, color: Colors.white),
+              ),
+              label: const Text('Hubungkan ke Google', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _loginGoogle(context),
+            ),
+          ),
+        ],
+        
+        // --- TAMBAHKAN IF (!isGuest) DI SINI ---
+        if (!isGuest) ...[
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.redAccent.withValues(alpha: 0.1),
+                foregroundColor: Colors.redAccent,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+              ),
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () => _logout(context), // PANGGIL FUNGSI LOGOUT
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildMenuTile(IconData icon, String title, String subtitle, Color textColor, bool isDark, {required VoidCallback onTap}) {
+    return ListTile(
+      leading: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: const Color(0xFF2563EB), size: 20),
+      ),
+      title: Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+      trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+      onTap: onTap,
+    );
+  }
+}
