@@ -515,6 +515,28 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                     },
                   ),
                   const SizedBox(height: 10),
+                  
+                  // --- TAMBAHAN TOMBOL HAPUS GRUP (MUNCUL JIKA ADMIN) ---
+                  if (isAdmin) ...[
+                    Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
+                    SizedBox(
+                      width: double.infinity,
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.delete_forever),
+                        label: const Text('Hapus Grup Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          Navigator.pop(context); // Tutup daftar anggota dulu
+                          _konfirmasiHapusGrup(context); // Panggil dialog kiamat
+                        },
+                      ),
+                    ),
+                  ],
+                  // --- BATAS TOMBOL HAPUS GRUP ---
+
                 ],
               );
             },
@@ -523,7 +545,65 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
       },
     );
   }
+// --- FUNGSI HAPUS GRUP (KHUSUS ADMIN) ---
+  void _konfirmasiHapusGrup(BuildContext context) {
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: Text('Hapus Grup Permanen?', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+          content: Text(
+            'Tindakan ini akan menghapus grup "${widget.namaGrup}" beserta SELURUH catatan transaksi di dalamnya secara permanen. Lanjutkan?', 
+            style: TextStyle(color: isDark ? Colors.white70 : Colors.black87, height: 1.5)
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () async {
+                // 1. Tutup dialog pop-up konfirmasi
+                Navigator.pop(context);
+
+                try {
+                  final grupRef = FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup);
+                  
+                  // 2. Ambil semua data transaksi di dalam sub-folder grup ini
+                  final trxSnap = await grupRef.collection('transaksi').get();
+                  
+                  // 3. Siapkan "Sapu Jagat" (Batch Delete) dari Firestore
+                  final batch = FirebaseFirestore.instance.batch();
+                  
+                  // Sapu bersih semua dokumen transaksi
+                  for (var doc in trxSnap.docs) {
+                    batch.delete(doc.reference);
+                  }
+                  
+                  // Sapu bersih folder utama grupnya
+                  batch.delete(grupRef);
+                  
+                  // 4. Eksekusi sapu jagatnya sekarang!
+                  await batch.commit();
+
+                  if (context.mounted) {
+                    // 5. Tendang user keluar dari halaman detail grup kembali ke Profil
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Grup berhasil dihapus permanen!'), backgroundColor: Colors.red));
+                  }
+                } catch(e) {
+                   if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal menghapus grup: $e'), backgroundColor: Colors.red));
+                }
+              },
+              child: const Text('Hapus Grup', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
+          ]
+        );
+      }
+    );
+  }
   // --- POP-UP UBAH PERAN & KICK ANGGOTA ---
   void _tampilDialogUbahRole(BuildContext context, String uidTarget, String roleSekarang, String namaAnggota, bool isDark) {
     showDialog(
