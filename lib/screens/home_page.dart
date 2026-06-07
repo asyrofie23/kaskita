@@ -219,7 +219,44 @@ class _HomePageState extends State<HomePage> {
                             themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
                           },
                         ),
-                        const Icon(Icons.notifications_none, size: 28),
+                        // --- LONCENG PINTAR (NOTIFIKASI) ---
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(user?.uid ?? 'guest')
+                          .collection('notifikasi')
+                          .where('isRead', isEqualTo: false) // Hanya hitung yang belum dibaca
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        int unreadCount = snapshot.data?.docs.length ?? 0;
+
+                        return Stack(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_none, size: 28),
+                              color: isDark ? Colors.white : Colors.black87,
+                              onPressed: () {
+                                _tampilLaciNotifikasi(context, isDark);
+                              },
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                right: 8,
+                                top: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                  child: Text(
+                                    unreadCount > 9 ? '9+' : '$unreadCount', 
+                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                                  ),
+                                ),
+                              )
+                          ],
+                        );
+                      }
+                    ),
+                    // --- BATAS LONCENG ---
                       ],
                     ),
                   ],
@@ -841,6 +878,98 @@ class _HomePageState extends State<HomePage> {
     );
   }
 }
+
+// --- LACI NOTIFIKASI ---
+  void _tampilLaciNotifikasi(BuildContext context, bool isDark) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.6,
+          maxChildSize: 0.9,
+          minChildSize: 0.4,
+          expand: false,
+          builder: (context, scrollController) {
+            return Column(
+              children: [
+                const SizedBox(height: 15),
+                Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey.shade300, borderRadius: BorderRadius.circular(10))),
+                const Padding(
+                  padding: EdgeInsets.all(15.0),
+                  child: Text('Notifikasi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                ),
+                Expanded(
+                  child: StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest')
+                        .collection('notifikasi')
+                        .orderBy('waktu', descending: true)
+                        .limit(20) // Maksimal nampilin 20 notif terbaru
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final docs = snapshot.data?.docs ?? [];
+                      if (docs.isEmpty) {
+                        return const Center(child: Text('Belum ada notifikasi baru.', style: TextStyle(color: Colors.grey)));
+                      }
+
+                      return ListView.builder(
+                        controller: scrollController,
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final doc = docs[index];
+                          final data = doc.data() as Map<String, dynamic>;
+                          final bool isRead = data['isRead'] ?? true;
+                          
+                          String waktuTampil = 'Baru saja';
+                          if (data['waktu'] != null && data['waktu'] is Timestamp) {
+                            waktuTampil = DateFormat('dd MMM HH:mm', 'id_ID').format((data['waktu'] as Timestamp).toDate());
+                          }
+
+                          return Container(
+                            color: isRead ? Colors.transparent : (isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.shade50),
+                            child: ListTile(
+                              leading: CircleAvatar(
+                                backgroundColor: isRead ? Colors.grey.withOpacity(0.2) : Colors.blue.withOpacity(0.2),
+                                child: Icon(Icons.notifications, color: isRead ? Colors.grey : Colors.blueAccent),
+                              ),
+                              title: Text(data['judul'] ?? '', style: TextStyle(fontWeight: isRead ? FontWeight.normal : FontWeight.bold)),
+                              subtitle: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 4),
+                                  Text(data['pesan'] ?? '', style: const TextStyle(fontSize: 13)),
+                                  const SizedBox(height: 4),
+                                  Text(waktuTampil, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                ],
+                              ),
+                              onTap: () {
+                                // Ubah status jadi sudah dibaca kalau diklik
+                                if (!isRead) {
+                                  doc.reference.update({'isRead': true});
+                                }
+                              },
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
 
 class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
   const NoAnimationFABAnimator();

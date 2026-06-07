@@ -369,27 +369,51 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                           if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
                           
                           final grupRef = FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).collection('transaksi');
+                          final user = FirebaseAuth.instance.currentUser;
+                          String namaPembuat = user?.displayName ?? user?.email?.split('@')[0] ?? 'Anggota';
 
                           if (isEditMode) {
                             await grupRef.doc(docId).update({
                               'judul': _judulController.text,
                               'nominal': int.parse(_nominalController.text),
                               'isPemasukan': isPemasukanTerpilih,
-                              'tanggal': Timestamp.fromDate(tanggalTerpilih), // <--- UPDATE DATA TANGGAL
+                              'tanggal': Timestamp.fromDate(tanggalTerpilih), 
                             });
                           } else {
-                            final user = FirebaseAuth.instance.currentUser;
-                            String namaPembuat = user?.displayName ?? user?.email?.split('@')[0] ?? 'Anggota';
-                            
                             await grupRef.add({
                               'judul': _judulController.text,
                               'nominal': int.parse(_nominalController.text),
                               'isPemasukan': isPemasukanTerpilih,
-                              'tanggal': Timestamp.fromDate(tanggalTerpilih), // <--- SIMPAN DATA TANGGAL
+                              'tanggal': Timestamp.fromDate(tanggalTerpilih), 
                               'uid_pembuat': user?.uid,
                               'nama_pembuat': namaPembuat,
                             });
                           }
+
+                          // ==========================================
+                          // MESIN PENGIRIM NOTIFIKASI KE ANGGOTA LAIN
+                          // ==========================================
+                          try {
+                            final grupDoc = await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).get();
+                            if (grupDoc.exists) {
+                              List<dynamic> idAnggota = grupDoc.data()?['id_anggota'] ?? [];
+                              
+                              for (String targetUid in idAnggota) {
+                                // Jangan kirim notif ke diri sendiri
+                                if (targetUid != user?.uid) {
+                                  await FirebaseFirestore.instance.collection('users').doc(targetUid).collection('notifikasi').add({
+                                    'judul': isEditMode ? 'Catatan Diedit' : 'Catatan Baru',
+                                    'pesan': '$namaPembuat ${isEditMode ? 'mengedit' : 'menambahkan'} transaksi "${_judulController.text}" di grup ${widget.namaGrup}.',
+                                    'waktu': FieldValue.serverTimestamp(),
+                                    'isRead': false, // Penanda belum dibaca (titik merah)
+                                  });
+                                }
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint('Gagal kirim notif: $e');
+                          }
+                          // ==========================================
                           
                           if (context.mounted) Navigator.pop(context);
                         },
