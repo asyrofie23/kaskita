@@ -167,7 +167,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   const SizedBox(height: 20),
                   // Cari bagian ini dan ubah angkanya
                   const Text(
-                    'v1.7.0', // <--- Versi
+                    'v1.8.0', // <--- Versi
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white70, // Sedikit dicerahkan biar estetik

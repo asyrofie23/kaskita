@@ -47,16 +47,43 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
 
     // Cek apakah user punya hak untuk menambah/mengedit catatan
     bool bisaEdit = widget.roleUser == 'Admin' || widget.roleUser == 'Editor';
+    bool isAdmin = widget.roleUser == 'Admin';
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.namaGrup, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-            Text('Kode: ${widget.kodeGrup} • Kamu: ${widget.roleUser}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
+        // KITA BUNGKUS JUDUL DENGAN STREAM BIAR NAMANYA REAL-TIME KALAU DIUBAH
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).snapshots(),
+          builder: (context, snapshot) {
+            String namaTampil = widget.namaGrup;
+            if (snapshot.hasData && snapshot.data!.data() != null) {
+              final data = snapshot.data!.data() as Map<String, dynamic>;
+              namaTampil = data['nama_grup'] ?? widget.namaGrup;
+            }
+
+            return GestureDetector(
+              onTap: isAdmin ? () => _tampilDialogUbahNamaGrup(context, namaTampil, isDark) : () {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hanya Admin yang bisa mengubah nama grup.')));
+              },
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(child: Text(namaTampil, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18), overflow: TextOverflow.ellipsis)),
+                      if (isAdmin) ...[
+                        const SizedBox(width: 8),
+                        Icon(Icons.edit, size: 16, color: isDark ? Colors.white54 : Colors.black54),
+                      ]
+                    ],
+                  ),
+                  Text('Kode: ${widget.kodeGrup} • Kamu: ${widget.roleUser}', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                ],
+              ),
+            );
+          }
         ),
         backgroundColor: bgColor,
         elevation: 0,
@@ -65,14 +92,12 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           IconButton(
             icon: const Icon(Icons.group_outlined),
             onPressed: () {
-              // PANGGIL FUNGSI POP-UP DI SINI
               _tampilDaftarAnggota(context);
             },
           )
         ],
       ),
       body: StreamBuilder<QuerySnapshot>(
-        // MENGAMBIL DATA KHUSUS DARI FOLDER TRANSAKSI GRUP INI
         stream: FirebaseFirestore.instance
             .collection('grup_kas')
             .doc(widget.kodeGrup)
@@ -86,7 +111,6 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
 
           final docs = snapshot.data?.docs ?? [];
           
-          // Hitung Saldo Bersama
           int totalPemasukan = 0;
           int totalPengeluaran = 0;
           for (var doc in docs) {
@@ -100,150 +124,138 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           }
           int totalSaldo = totalPemasukan - totalPengeluaran;
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // KARTU SALDO BERSAMA
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF2563EB), Color(0xFF1E3A8A)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Saldo Kas Bersama', style: TextStyle(color: Colors.white70, fontSize: 14)),
-                      const SizedBox(height: 10),
-                      Text('Rp ${_formatUang(totalSaldo)}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 25),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          // HAPUS SingleChildScrollView, GANTI JADI Column
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              /// ==========================================
+              /// BAGIAN HEADER & KARTU (TETAP DIAM DI ATAS)
+              /// ==========================================
+              Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFF2563EB), Color(0xFF1E3A8A)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _buildSaldoInfo(Icons.arrow_downward, 'Pemasukan', 'Rp ${_formatUang(totalPemasukan)}', Colors.greenAccent),
-                          _buildSaldoInfo(Icons.arrow_upward, 'Pengeluaran', 'Rp ${_formatUang(totalPengeluaran)}', Colors.redAccent),
+                          const Text('Saldo Kas Bersama', style: TextStyle(color: Colors.white70, fontSize: 14)),
+                          const SizedBox(height: 10),
+                          Text('Rp ${_formatUang(totalSaldo)}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 25),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              _buildSaldoInfo(Icons.arrow_downward, 'Pemasukan', 'Rp ${_formatUang(totalPemasukan)}', Colors.greenAccent),
+                              _buildSaldoInfo(Icons.arrow_upward, 'Pengeluaran', 'Rp ${_formatUang(totalPengeluaran)}', Colors.redAccent),
+                            ],
+                          ),
                         ],
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 30),
-                const Text('Riwayat Transaksi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                const SizedBox(height: 15),
-
-                // LIST TRANSAKSI
-                if (docs.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 30),
-                      child: Text('Belum ada iuran atau pengeluaran di grup ini.', style: TextStyle(color: Colors.grey)),
                     ),
-                  )
-                else
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: docs.length,
-                    itemBuilder: (context, index) {
-                      final doc = docs[index];
-                      final docId = doc.id; // Ambil ID dokumen buat diedit/dihapus
-                      final data = doc.data() as Map<String, dynamic>;
-                      final bool isPemasukan = data['isPemasukan'] ?? true;
-                      final String judul = data['judul'] ?? '';
-                      final int nominal = data['nominal'] ?? 0;
-                      final String pembuat = data['nama_pembuat'] ?? 'Anggota';
-                      
-                      String waktuTampil = '';
-                      if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
-                        waktuTampil = DateFormat('dd MMM yyyy, HH:mm').format((data['tanggal'] as Timestamp).toDate());
-                      }
+                    const SizedBox(height: 30),
+                    const Text('Riwayat Transaksi', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                  ],
+                ),
+              ),
 
-                      // 1. Simpan UI Kotak Transaksi ke dalam variabel
-                      Widget kontenTransaksi = Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: cardColor,
-                          borderRadius: BorderRadius.circular(15),
-                          boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isPemasukan ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15),
-                                shape: BoxShape.circle,
-                              ),
-                              child: Icon(isPemasukan ? Icons.arrow_downward : Icons.arrow_upward, color: isPemasukan ? Colors.green : Colors.red),
+              /// ==========================================
+              /// DAFTAR TRANSAKSI (BISA SCROLL INDEPENDEN)
+              /// ==========================================
+              Expanded(
+                child: docs.isEmpty
+                    ? const Center(
+                        child: Text('Belum ada iuran atau pengeluaran di grup ini.', style: TextStyle(color: Colors.grey)),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.symmetric(horizontal: 20), // Tambah padding kiri kanan
+                        // Hapus shrinkWrap dan physics
+                        itemCount: docs.length,
+                        itemBuilder: (context, index) {
+                          final doc = docs[index];
+                          final docId = doc.id;
+                          final data = doc.data() as Map<String, dynamic>;
+                          final bool isPemasukan = data['isPemasukan'] ?? true;
+                          final String judul = data['judul'] ?? '';
+                          final int nominal = data['nominal'] ?? 0;
+                          final String pembuat = data['nama_pembuat'] ?? 'Anggota';
+                          
+                          String waktuTampil = '';
+                          if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
+                            waktuTampil = DateFormat('dd MMM yyyy, HH:mm').format((data['tanggal'] as Timestamp).toDate());
+                          }
+
+                          Widget kontenTransaksi = Container(
+                            margin: const EdgeInsets.only(bottom: 10),
+                            padding: const EdgeInsets.all(15),
+                            decoration: BoxDecoration(
+                              color: cardColor,
+                              borderRadius: BorderRadius.circular(15),
+                              boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
                             ),
-                            const SizedBox(width: 15),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                                  const SizedBox(height: 4),
-                                  Text('Oleh: $pembuat', style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.w500)),
-                                ],
-                              ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
+                            child: Row(
                               children: [
-                                Text(
-                                  '${isPemasukan ? "+" : "-"}Rp ${_formatUang(nominal)}',
-                                  style: TextStyle(fontWeight: FontWeight.bold, color: isPemasukan ? Colors.green : Colors.red, fontSize: 16),
+                                Container(
+                                  padding: const EdgeInsets.all(10),
+                                  decoration: BoxDecoration(color: isPemasukan ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), shape: BoxShape.circle),
+                                  child: Icon(isPemasukan ? Icons.arrow_downward : Icons.arrow_upward, color: isPemasukan ? Colors.green : Colors.red),
                                 ),
-                                const SizedBox(height: 4),
-                                Text(waktuTampil, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                const SizedBox(width: 15),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(judul, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                                      const SizedBox(height: 4),
+                                      Text('Oleh: $pembuat', style: const TextStyle(color: Colors.blueAccent, fontSize: 12, fontWeight: FontWeight.w500)),
+                                    ],
+                                  ),
+                                ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    Text('${isPemasukan ? "+" : "-"}Rp ${_formatUang(nominal)}', style: TextStyle(fontWeight: FontWeight.bold, color: isPemasukan ? Colors.green : Colors.red, fontSize: 16)),
+                                    const SizedBox(height: 4),
+                                    Text(waktuTampil, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+                                  ],
+                                ),
                               ],
                             ),
-                          ],
-                        ),
-                      );
+                          );
 
-                      // 2. Kalau jabatannya Admin/Editor, bungkus pakai fitur Swipe!
-                      if (bisaEdit) {
-                        // Ambil tanggal asli dari database buat dimasukkan ke form Edit
-                        DateTime tanggalAsli = DateTime.now();
-                        if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
-                          tanggalAsli = (data['tanggal'] as Timestamp).toDate();
-                        }
+                          if (bisaEdit) {
+                            DateTime tanggalAsli = DateTime.now();
+                            if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
+                              tanggalAsli = (data['tanggal'] as Timestamp).toDate();
+                            }
 
-                        return SlidableTile(
-                          key: Key(docId),
-                          onEdit: () => _tampilFormTransaksiGrup(
-                            context,
-                            docId: docId,
-                            judulAwal: judul,
-                            nominalAwal: nominal,
-                            isPemasukanAwal: isPemasukan,
-                            tanggalAwal: tanggalAsli, // <--- TAMBAHAN BARU: Kirim tanggal aslinya
-                          ),
-                          onDelete: () => _konfirmasiHapusTransaksiGrup(context, docId, judul),
-                          child: kontenTransaksi,
-                        );
-                      }
-
-                      // 3. Kalau cuma Spectator, kembalikan kotak biasa (nggak bisa di-swipe)
-                      return kontenTransaksi;
-                    },
-                  ),
-              ],
-            ),
+                            return SlidableTile(
+                              key: Key(docId),
+                              onEdit: () => _tampilFormTransaksiGrup(context, docId: docId, judulAwal: judul, nominalAwal: nominal, isPemasukanAwal: isPemasukan, tanggalAwal: tanggalAsli),
+                              onDelete: () => _konfirmasiHapusTransaksiGrup(context, docId, judul),
+                              child: kontenTransaksi,
+                            );
+                          }
+                          return kontenTransaksi;
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
       
-      // TOMBOL PLUS HANYA MUNCUL JIKA USER ADALAH ADMIN ATAU EDITOR
       floatingActionButton: bisaEdit ? FloatingActionButton(
         backgroundColor: const Color(0xFF1D4ED8),
         onPressed: () => _tampilFormTransaksiGrup(context),
@@ -757,6 +769,65 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               child: const Text('Hapus', style: TextStyle(color: Colors.white)),
             ),
           ],
+        );
+      },
+    );
+  }
+  // --- POP-UP UBAH NAMA GRUP (KHUSUS ADMIN) ---
+  void _tampilDialogUbahNamaGrup(BuildContext context, String namaSekarang, bool isDark) {
+    final TextEditingController controller = TextEditingController(text: namaSekarang);
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text('Ubah Nama Grup', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+              content: TextField(
+                controller: controller,
+                autofocus: true,
+                style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                decoration: InputDecoration(
+                  hintText: 'Masukkan nama grup baru',
+                  hintStyle: TextStyle(color: isDark ? Colors.white54 : Colors.black54),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  onPressed: isLoading ? null : () async {
+                    final String namaBaru = controller.text.trim();
+                    if (namaBaru.isEmpty || namaBaru == namaSekarang) return;
+
+                    setDialogState(() => isLoading = true);
+
+                    try {
+                      await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
+                        'nama_grup': namaBaru
+                      });
+                      
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama grup berhasil diubah!'), backgroundColor: Colors.green));
+                      }
+                    } catch (e) {
+                      setDialogState(() => isLoading = false);
+                      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengubah nama: $e'), backgroundColor: Colors.red));
+                    }
+                  },
+                  child: isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Simpan', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
         );
       },
     );

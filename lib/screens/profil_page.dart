@@ -10,8 +10,14 @@ import 'package:google_sign_in/google_sign_in.dart';
 import '../main.dart';
 import 'splash_screen.dart';
 
-class ProfilPage extends StatelessWidget {
+class ProfilPage extends StatefulWidget {
   const ProfilPage({super.key});
+
+  @override
+  State<ProfilPage> createState() => _ProfilPageState();
+}
+
+class _ProfilPageState extends State<ProfilPage> {
 
   /// --- FUNGSI LOGIN GOOGLE ---
   Future<void> _loginGoogle(BuildContext context) async {
@@ -305,7 +311,7 @@ class ProfilPage extends StatelessWidget {
               // Nama Aplikasi & Versi
               Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 5),
-              const Text('Versi 1.7.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
+              const Text('Versi 1.8.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
               const SizedBox(height: 15),
               // Deskripsi
               Text(
@@ -456,7 +462,7 @@ class ProfilPage extends StatelessWidget {
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
                   _buildMenuTile(Icons.download_outlined, 'Ekspor Laporan (PDF/CSV)', 'Unduh riwayat transaksi', textColor, isDark, onTap: () {}),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
-                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.7.0', textColor, isDark, onTap: () {
+                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.8.0', textColor, isDark, onTap: () {
                     _tampilDialogTentang(context, isDark);}),
                 ],
               ),
@@ -517,23 +523,31 @@ class ProfilPage extends StatelessWidget {
     }
     return Column(
       children: [
-        CircleAvatar(
-          radius: 40,
-          backgroundColor: Colors.grey.shade300,
-          backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
-          child: user.photoURL == null ? const Icon(Icons.person, size: 50, color: Colors.white) : null,
-        ),
-        const SizedBox(height: 15),
-        // GANTI BAGIAN TEKS NAMA INI
-        Text(
-          namaTampil,
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
-        ),
-        const SizedBox(height: 5),
-        // Ambil email dari akun Google/Tamu
-        Text(
-          isGuest ? 'Data disimpan lokal di perangkat ini' : (user.email ?? '-'),
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        GestureDetector(
+          onTap: isGuest ? null : () => _tampilDialogUbahNama(context, isDark),
+          behavior: HitTestBehavior.opaque,
+          child: Column(
+            children: [
+              CircleAvatar(
+                radius: 40,
+                backgroundColor: Colors.grey.shade300,
+                backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
+                child: user.photoURL == null ? const Icon(Icons.edit, size: 50, color: Colors.white) : null,
+              ),
+              const SizedBox(height: 15),
+              // GANTI BAGIAN TEKS NAMA INI
+              Text(
+                namaTampil,
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+              ),
+              const SizedBox(height: 5),
+              // Ambil email dari akun Google/Tamu
+              Text(
+                isGuest ? 'Data disimpan lokal di perangkat ini' : (user.email ?? '-'),
+                style: const TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+            ],
+          ),
         ),
         if (isGuest) ...[
           const SizedBox(height: 15),
@@ -680,6 +694,98 @@ class ProfilPage extends StatelessWidget {
         ),
         const SizedBox(height: 25),
       ],
+    );
+  }
+  // --- POP-UP UBAH NAMA PROFIL ---
+  void _tampilDialogUbahNama(BuildContext context, bool isDark) {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null || user.isAnonymous) return;
+
+    // Siapkan kotak input, otomatis diisi dengan nama yang sekarang
+    final TextEditingController _namaController = TextEditingController(
+        text: user.displayName ?? user.email?.split('@')[0] ?? '');
+    bool isLoading = false;
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+              title: Text('Ubah Nama Panggilan', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Nama ini akan terlihat oleh semua anggota di grup patunganmu.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
+                  const SizedBox(height: 15),
+                  TextField(
+                    controller: _namaController,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    decoration: InputDecoration(
+                      hintText: 'Misal: Arif', 
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      prefixIcon: const Icon(Icons.person_outline),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  onPressed: isLoading ? null : () async {
+                    final String namaBaru = _namaController.text.trim();
+                    // Kalau namanya kosong atau nggak berubah, batalkan
+                    if (namaBaru.isEmpty || namaBaru == user.displayName) return;
+
+                    setDialogState(() => isLoading = true);
+
+                    try {
+                      // 1. UPDATE DI AKUN UTAMA (FIREBASE AUTH)
+                      await user.updateDisplayName(namaBaru);
+
+                      // 2. CARI SEMUA GRUP YANG DIIKUTI USER INI
+                      final grupSnap = await FirebaseFirestore.instance
+                          .collection('grup_kas')
+                          .where('id_anggota', arrayContains: user.uid)
+                          .get();
+
+                      // 3. SIAPKAN MESIN BATCH (SAPU JAGAT)
+                      final batch = FirebaseFirestore.instance.batch();
+                      for (var doc in grupSnap.docs) {
+                        // Update nama di masing-masing grup
+                        batch.update(doc.reference, {
+                          'nama_anggota.${user.uid}': namaBaru
+                        });
+                      }
+                      
+                      // Eksekusi pembaruan serentak!
+                      await batch.commit();
+
+                      if (context.mounted) {
+                        Navigator.pop(context);
+                        // Render ulang halaman profil biar namanya langsung berubah di layar
+                        setState(() {}); 
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama berhasil diubah dan disinkronisasi!'), backgroundColor: Colors.green));
+                      }
+                    } catch (e) {
+                      setDialogState(() => isLoading = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Gagal mengubah nama: $e'), backgroundColor: Colors.red));
+                      }
+                    }
+                  },
+                  child: isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Simpan', style: TextStyle(color: Colors.white)),
+                ),
+              ],
+            );
+          }
+        );
+      },
     );
   }
 }
