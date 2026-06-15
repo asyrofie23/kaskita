@@ -44,6 +44,50 @@ class _AnggaranPageState extends State<AnggaranPage> {
     return total;
   }
 
+  void _konfirmasiHapusAnggaran(BuildContext context, String id) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Hapus Batas Anggaran'),
+          content: const Text('Apakah Anda yakin ingin menghapus batas anggaran ini?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.pop(context); // Close dialog
+                final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
+                try {
+                  await FirebaseFirestore.instance
+                      .collection('users')
+                      .doc(uid)
+                      .collection('anggaran')
+                      .doc(id)
+                      .delete();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Batas anggaran berhasil dihapus')),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Gagal menghapus: $e')),
+                    );
+                  }
+                }
+              },
+              child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -130,9 +174,52 @@ class _AnggaranPageState extends State<AnggaranPage> {
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(anggaran.nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                        Text(anggaran.kategori, style: const TextStyle(color: Color(0xFF2563EB), fontSize: 12, fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(anggaran.nama, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                              const SizedBox(height: 4),
+                              Text(anggaran.kategori, style: const TextStyle(color: Color(0xFF2563EB), fontSize: 12, fontWeight: FontWeight.bold)),
+                            ],
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          icon: const Icon(Icons.more_vert, size: 20),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onSelected: (value) {
+                            if (value == 'edit') {
+                              _tampilFormAnggaran(context, isDark, anggaranYangDiedit: anggaran);
+                            } else if (value == 'hapus') {
+                              _konfirmasiHapusAnggaran(context, anggaran.id);
+                            }
+                          },
+                          itemBuilder: (BuildContext context) => [
+                            const PopupMenuItem<String>(
+                              value: 'edit',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit, size: 18, color: Colors.blue),
+                                  SizedBox(width: 8),
+                                  Text('Edit'),
+                                ],
+                              ),
+                            ),
+                            const PopupMenuItem<String>(
+                              value: 'hapus',
+                              child: Row(
+                                children: [
+                                  Icon(Icons.delete, size: 18, color: Colors.red),
+                                  SizedBox(width: 8),
+                                  Text('Hapus', style: TextStyle(color: Colors.red)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 15),
@@ -185,13 +272,14 @@ class _AnggaranPageState extends State<AnggaranPage> {
   }
 
   // FORM BOTTOM SHEET (Gambar Kedua)
-  void _tampilFormAnggaran(BuildContext context, bool isDark) {
-    final TextEditingController namaController = TextEditingController();
-    final TextEditingController limitController = TextEditingController();
-    String kategoriTerpilih = 'Semua Kategori';
-    String periodeTerpilih = 'MONTHLY';
-    double nilaiPeringatan = 80.0;
-    bool isRollover = false;
+  void _tampilFormAnggaran(BuildContext context, bool isDark, {Anggaran? anggaranYangDiedit}) {
+    final TextEditingController namaController = TextEditingController(text: anggaranYangDiedit?.nama ?? '');
+    final TextEditingController limitController = TextEditingController(
+        text: anggaranYangDiedit != null ? anggaranYangDiedit.limit.toString() : '');
+    String kategoriTerpilih = anggaranYangDiedit?.kategori ?? 'Semua Kategori';
+    String periodeTerpilih = anggaranYangDiedit?.periode ?? 'MONTHLY';
+    double nilaiPeringatan = anggaranYangDiedit?.peringatan ?? 80.0;
+    bool isRollover = anggaranYangDiedit?.rollover ?? false;
 
     // List kategori statis (Bisa diganti dinamis nanti)
     List<String> listKategori = ['Semua Kategori', 'Makan', 'Transportasi', 'Hiburan', 'Belanja'];
@@ -217,7 +305,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     Row(
                       children: [
                         IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
-                        const Text('Buat Batas Anggaran', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                        Text(anggaranYangDiedit != null ? 'Edit Batas Anggaran' : 'Buat Batas Anggaran', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
                       ],
                     ),
                     const SizedBox(height: 15),
@@ -336,19 +424,36 @@ class _AnggaranPageState extends State<AnggaranPage> {
 
                           // Simpan ke Firestore
                           final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
-                          await FirebaseFirestore.instance.collection('users').doc(uid).collection('anggaran').add({
+                          final data = {
                             'nama': namaController.text,
                             'limit': int.parse(limitController.text),
                             'kategori': kategoriTerpilih,
                             'periode': periodeTerpilih,
                             'peringatan': nilaiPeringatan,
                             'rollover': isRollover,
-                            'createdAt': FieldValue.serverTimestamp(),
-                          });
+                          };
 
-                          Navigator.pop(context);
+                          if (anggaranYangDiedit != null) {
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .collection('anggaran')
+                                .doc(anggaranYangDiedit.id)
+                                .update(data);
+                          } else {
+                            data['createdAt'] = FieldValue.serverTimestamp();
+                            await FirebaseFirestore.instance
+                                .collection('users')
+                                .doc(uid)
+                                .collection('anggaran')
+                                .add(data);
+                          }
+
+                          if (context.mounted) {
+                            Navigator.pop(context);
+                          }
                         },
-                        child: const Text('Buat Anggaran', style: TextStyle(color: Colors.white, fontSize: 16)),
+                        child: Text(anggaranYangDiedit != null ? 'Simpan Perubahan' : 'Buat Anggaran', style: const TextStyle(color: Colors.white, fontSize: 16)),
                       ),
                     ),
                     const SizedBox(height: 20),

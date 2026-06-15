@@ -23,6 +23,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController _judulController = TextEditingController();
   final TextEditingController _nominalController = TextEditingController();
   int _pilihanTabSekarang = 0;
+  late PageController _pageController;
   
   // Variabel untuk menyimpan bulan yang sedang dipilih (Default: Bulan ini)
   DateTime _bulanAktif = DateTime.now(); 
@@ -30,6 +31,7 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _pageController = PageController(initialPage: _pilihanTabSekarang);
   }
 
   String _formatUang(int angka) {
@@ -48,13 +50,15 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _judulController.dispose();
     _nominalController.dispose();
+    _pageController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
-    Color cardColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA);
+    Color cardColor = isDark ? const Color(0xFF1E293B) : Colors.white;
 
     // Hitung batas awal dan akhir bulan yang dipilih
     final startOfMonth = DateTime(_bulanAktif.year, _bulanAktif.month, 1);
@@ -107,6 +111,7 @@ class _HomePageState extends State<HomePage> {
         int totalSaldo = totalPemasukan - totalPengeluaran;
 
         return Scaffold(
+          backgroundColor: bgColor,
           floatingActionButton: FloatingActionButton(
             heroTag: null,
             backgroundColor: const Color(0xFF1D4ED8),
@@ -124,6 +129,7 @@ class _HomePageState extends State<HomePage> {
               padding: const EdgeInsets.symmetric(horizontal: 10.0), 
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildBottomNavItem(Icons.home, 'Home', 0),
                   _buildBottomNavItem(Icons.pie_chart, 'Grafik', 1), // Menu Riwayat diubah jadi Grafik
@@ -134,39 +140,20 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
           ),
-          body: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 320),
-            reverseDuration: const Duration(milliseconds: 280),
-            transitionBuilder: (Widget child, Animation<double> animation) {
-              final isEntering = child.key is ValueKey && (child.key as ValueKey).value == _pilihanTabSekarang;
-              if (isEntering) {
-                return ScaleTransition(
-                  scale: Tween<double>(begin: 0.92, end: 1.0).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutBack)),
-                  child: FadeTransition(opacity: animation, child: child),
-                );
-              } else {
-                return FadeTransition(opacity: animation, child: child);
-              }
+          body: PageView(
+            controller: _pageController,
+            physics: const NeverScrollableScrollPhysics(),
+            onPageChanged: (index) {
+              setState(() {
+                _pilihanTabSekarang = index;
+              });
             },
-            child: _pilihanTabSekarang == 0
-                ? KeyedSubtree(
-                    key: const ValueKey(0),
-                    child: _buildKontenHalamanUtama(listTransaksi, totalSaldo, totalPemasukan, totalPengeluaran, docs, isDark, cardColor),
-                  )
-                : _pilihanTabSekarang == 1
-                ? const KeyedSubtree(
-                    key: ValueKey(1),
-                    child: GrafikPage(), // <--- PANGGIL HALAMAN GRAFIK DI SINI
-                  )
-                    : _pilihanTabSekarang == 2
-                        ? KeyedSubtree(
-                            key: const ValueKey(2),
-                            child: AnggaranPage(semuaTransaksi: listTransaksi),
-                          )
-                        : const KeyedSubtree(
-                            key: ValueKey(3),
-                            child: ProfilPage(),
-                          ),
+            children: [
+              _buildKontenHalamanUtama(listTransaksi, totalSaldo, totalPemasukan, totalPengeluaran, docs, isDark, cardColor),
+              const GrafikPage(),
+              AnggaranPage(semuaTransaksi: listTransaksi),
+              const ProfilPage(),
+            ],
           ),
         );
       },
@@ -865,15 +852,33 @@ class _HomePageState extends State<HomePage> {
 
   Widget _buildBottomNavItem(IconData icon, String title, int indexTarget) {
     final bool isSelected = _pilihanTabSekarang == indexTarget;
-    return GestureDetector(
-      onTap: () => setState(() => _pilihanTabSekarang = indexTarget),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, color: isSelected ? const Color(0xFF2563EB) : Colors.grey, size: 26),
-          const SizedBox(height: 4),
-          Text(title, style: TextStyle(fontSize: 10, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, color: isSelected ? const Color(0xFF2563EB) : Colors.grey)),
-        ],
+    return Expanded(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () {
+          setState(() => _pilihanTabSekarang = indexTarget);
+          _pageController.animateToPage(
+            indexTarget,
+            duration: const Duration(milliseconds: 300),
+            curve: Curves.easeInOut,
+          );
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: isSelected ? const Color(0xFF2563EB) : Colors.grey, size: 26),
+            const SizedBox(height: 4),
+            Text(
+              title, 
+              style: TextStyle(
+                fontSize: 10, 
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal, 
+                color: isSelected ? const Color(0xFF2563EB) : Colors.grey,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

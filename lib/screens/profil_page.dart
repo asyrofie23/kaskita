@@ -161,7 +161,7 @@ class _ProfilPageState extends State<ProfilPage> {
                         'anggota': {
                           user.uid: 'Admin'
                         },
-                        'nama_anggota': { // <--- TAMBAHAN: Simpan nama
+                        'nama_anggota': { 
                           user.uid: namaUser
                         },
                         'id_anggota': [user.uid]
@@ -311,7 +311,7 @@ class _ProfilPageState extends State<ProfilPage> {
               // Nama Aplikasi & Versi
               Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 5),
-              const Text('Versi 1.8.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
+              const Text('Versi 1.9.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
               const SizedBox(height: 15),
               // Deskripsi
               Text(
@@ -458,11 +458,9 @@ class _ProfilPageState extends State<ProfilPage> {
               ),
               child: Column(
                 children: [
-                  _buildMenuTile(Icons.notifications_outlined, 'Notifikasi', 'Atur pengingat anggaran', textColor, isDark, onTap: () {}),
-                  Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
                   _buildMenuTile(Icons.download_outlined, 'Ekspor Laporan (PDF/CSV)', 'Unduh riwayat transaksi', textColor, isDark, onTap: () {}),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
-                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.8.0', textColor, isDark, onTap: () {
+                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.9.0', textColor, isDark, onTap: () {
                     _tampilDialogTentang(context, isDark);}),
                 ],
               ),
@@ -534,11 +532,19 @@ class _ProfilPageState extends State<ProfilPage> {
                 backgroundImage: user.photoURL != null ? NetworkImage(user.photoURL!) : null,
                 child: user.photoURL == null ? const Icon(Icons.edit, size: 50, color: Colors.white) : null,
               ),
-              const SizedBox(height: 15),
-              // GANTI BAGIAN TEKS NAMA INI
-              Text(
-                namaTampil,
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+               const SizedBox(height: 15),
+               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    namaTampil,
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: textColor),
+                  ),
+                  if (!isGuest) ...[
+                    const SizedBox(width: 8),
+                    Icon(Icons.edit, size: 16, color: isDark ? Colors.white70 : Colors.black54),
+                  ],
+                ],
               ),
               const SizedBox(height: 5),
               // Ambil email dari akun Google/Tamu
@@ -724,7 +730,7 @@ class _ProfilPageState extends State<ProfilPage> {
                     controller: _namaController,
                     style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                     decoration: InputDecoration(
-                      hintText: 'Misal: Arif', 
+                      hintText: 'Username', 
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       prefixIcon: const Icon(Icons.person_outline),
                     ),

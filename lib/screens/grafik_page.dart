@@ -90,7 +90,7 @@ class _GrafikPageState extends State<GrafikPage> {
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
-    Color bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF8F9FA);
+    Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA);
     Color textColor = isDark ? Colors.white : Colors.black87;
 
     final startOfMonth = DateTime(_bulanAktif.year, _bulanAktif.month, 1);
@@ -104,28 +104,24 @@ class _GrafikPageState extends State<GrafikPage> {
             /// 1. HEADER & TOGGLE PENGELUARAN/PEMASUKAN
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 24), 
-                  GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _isPengeluaran = !_isPengeluaran;
-                      });
-                    },
-                    child: Row(
-                      children: [
-                        Text(
-                          _isPengeluaran ? 'Pengeluaran' : 'Pemasukan',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-                        ),
-                        Icon(Icons.keyboard_arrow_down, color: textColor),
-                      ],
-                    ),
+              child: Center(
+                child: GestureDetector(
+                  onTap: () {
+                    setState(() {
+                      _isPengeluaran = !_isPengeluaran;
+                    });
+                  },
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _isPengeluaran ? 'Pengeluaran' : 'Pemasukan',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
+                      ),
+                      Icon(Icons.keyboard_arrow_down, color: textColor),
+                    ],
                   ),
-                  Icon(Icons.calendar_month_outlined, color: textColor),
-                ],
+                ),
               ),
             ),
 

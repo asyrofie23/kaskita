@@ -451,6 +451,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
 
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         return Container(
@@ -475,105 +476,107 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               final String myRole = anggotaMap[myUid] ?? 'Anggota'; // Cek role diri sendiri
               final bool isAdmin = myRole == 'Admin'; // Cek apakah aku admin
 
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      width: 40, height: 4,
-                      margin: const EdgeInsets.only(bottom: 15),
-                      decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
-                    ),
-                  ),
-                  const Text('Daftar Anggota Grup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
-                  const SizedBox(height: 5),
-                  Text('Kode Undangan: ${widget.kodeGrup}', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
-                  if (isAdmin)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 8.0),
-                      child: Text('Ketuk nama anggota untuk mengubah perannya.', style: TextStyle(fontSize: 12, color: Colors.orange)),
-                    ),
-                  const SizedBox(height: 15),
-                  
-                  // LIST ANGGOTA
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: anggotaMap.length,
-                    itemBuilder: (context, index) {
-                      String uidAnggota = anggotaMap.keys.elementAt(index);
-                      String roleAnggota = anggotaMap[uidAnggota];
-                      bool isMe = uidAnggota == myUid;
-                      
-                      // Ambil nama dari database (kalau grup lama belum ada datanya, pakai default)
-                      final Map<String, dynamic> namaMap = data.containsKey('nama_anggota') ? data['nama_anggota'] : {};
-                      String namaAsli = namaMap[uidAnggota] ?? 'Anggota Tim';
-
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        leading: CircleAvatar(
-                          backgroundColor: roleAnggota == 'Admin' 
-                              ? Colors.blueAccent.withOpacity(0.2) 
-                              : Colors.grey.withOpacity(0.2),
-                          child: Icon(
-                            roleAnggota == 'Admin' ? Icons.admin_panel_settings : Icons.person,
-                            color: roleAnggota == 'Admin' ? Colors.blueAccent : Colors.grey,
-                          ),
-                        ),
-                        // NAMA SEKARANG MUNCUL DI SINI
-                        title: Text(
-                          isMe ? '$namaAsli (Kamu)' : namaAsli, 
-                          style: const TextStyle(fontWeight: FontWeight.bold)
-                        ),
-                        subtitle: Text(
-                          'ID: ${uidAnggota.substring(0, 8)}...', 
-                          style: const TextStyle(fontSize: 12, color: Colors.grey)
-                        ),
-                        trailing: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: roleAnggota == 'Admin' 
-                                ? Colors.blueAccent 
-                                : (roleAnggota == 'Editor' ? Colors.green : Colors.orange),
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Text(
-                            roleAnggota, 
-                            style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)
-                          ),
-                        ),
-                        // KABEL UNTUK UBAH JABATAN & KICK
-                        onTap: (isAdmin && !isMe) ? () {
-                          _tampilDialogUbahRole(context, uidAnggota, roleAnggota, namaAsli, isDark); // <--- Tambah lemparan namaAsli
-                        } : null,
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  
-                  // --- TAMBAHAN TOMBOL HAPUS GRUP (MUNCUL JIKA ADMIN) ---
-                  if (isAdmin) ...[
-                    Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
-                    SizedBox(
-                      width: double.infinity,
-                      child: TextButton.icon(
-                        style: TextButton.styleFrom(
-                          foregroundColor: Colors.red,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                        ),
-                        icon: const Icon(Icons.delete_forever),
-                        label: const Text('Hapus Grup Ini', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () {
-                          Navigator.pop(context); // Tutup daftar anggota dulu
-                          _konfirmasiHapusGrup(context); // Panggil dialog kiamat
-                        },
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40, height: 4,
+                        margin: const EdgeInsets.only(bottom: 15),
+                        decoration: BoxDecoration(color: Colors.grey.shade400, borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
-                  ],
-                  // --- BATAS TOMBOL HAPUS GRUP ---
+                    const Text('Daftar Anggota Grup', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+                    const SizedBox(height: 5),
+                    Text('Kode Undangan: ${widget.kodeGrup}', style: const TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+                    if (isAdmin)
+                      const Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text('Ketuk nama anggota untuk mengubah perannya.', style: TextStyle(fontSize: 12, color: Colors.orange)),
+                      ),
+                    const SizedBox(height: 15),
+                    
+                    // LIST ANGGOTA
+                    ListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: anggotaMap.length,
+                      itemBuilder: (context, index) {
+                        String uidAnggota = anggotaMap.keys.elementAt(index);
+                        String roleAnggota = anggotaMap[uidAnggota];
+                        bool isMe = uidAnggota == myUid;
+                        
+                        // Ambil nama dari database (kalau grup lama belum ada datanya, pakai default)
+                        final Map<String, dynamic> namaMap = data.containsKey('nama_anggota') ? data['nama_anggota'] : {};
+                        String namaAsli = namaMap[uidAnggota] ?? 'Anggota Tim';
 
-                ],
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: roleAnggota == 'Admin' 
+                                ? Colors.blueAccent.withOpacity(0.2) 
+                                : Colors.grey.withOpacity(0.2),
+                            child: Icon(
+                              roleAnggota == 'Admin' ? Icons.admin_panel_settings : Icons.person,
+                              color: roleAnggota == 'Admin' ? Colors.blueAccent : Colors.grey,
+                            ),
+                          ),
+                          // NAMA SEKARANG MUNCUL DI SINI
+                          title: Text(
+                            isMe ? '$namaAsli (Kamu)' : namaAsli, 
+                            style: const TextStyle(fontWeight: FontWeight.bold)
+                          ),
+                          subtitle: Text(
+                            'ID: ${uidAnggota.substring(0, 8)}...', 
+                            style: const TextStyle(fontSize: 12, color: Colors.grey)
+                          ),
+                          trailing: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: roleAnggota == 'Admin' 
+                                  ? Colors.blueAccent 
+                                  : (roleAnggota == 'Editor' ? Colors.green : Colors.orange),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Text(
+                              roleAnggota, 
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)
+                            ),
+                          ),
+                          // KABEL UNTUK UBAH JABATAN & KICK
+                          onTap: (isAdmin && !isMe) ? () {
+                            _tampilDialogUbahRole(context, uidAnggota, roleAnggota, namaAsli, isDark); // <--- Tambah lemparan namaAsli
+                          } : null,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    
+                    // --- TAMBAHAN TOMBOL HAPUS GRUP (MUNCUL JIKA ADMIN) ---
+                    if (isAdmin) ...[
+                      Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton.icon(
+                          style: TextButton.styleFrom(
+                            foregroundColor: Colors.red,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                          ),
+                          icon: const Icon(Icons.delete_forever),
+                          label: const Text('Hapus Grup Ini', style: TextStyle(fontWeight: FontWeight.bold)),
+                          onPressed: () {
+                            Navigator.pop(context); // Tutup daftar anggota dulu
+                            _konfirmasiHapusGrup(context); // Panggil dialog kiamat
+                          },
+                        ),
+                      ),
+                    ],
+                    // --- BATAS TOMBOL HAPUS GRUP ---
+
+                  ],
+                ),
               );
             },
           ),
