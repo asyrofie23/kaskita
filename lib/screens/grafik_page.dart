@@ -4,6 +4,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 import 'package:fl_chart/fl_chart.dart';
 
+
 class GrafikPage extends StatefulWidget {
   const GrafikPage({super.key});
 
@@ -14,21 +15,21 @@ class GrafikPage extends StatefulWidget {
 class _GrafikPageState extends State<GrafikPage> {
   // Flag toggle pilihan jenis data: true = Pengeluaran, false = Pemasukan
   bool _isPengeluaran = true; 
-  // Menyimpan bulan aktif yang sedang dipilih untuk grafik
+  
   DateTime _bulanAktif = DateTime.now();
   
-  // Kontroler scroll horizontal untuk navigasi list bulan di atas
+  // Kontroler scroll horizontal
   late ScrollController _scrollBulanController;
-  // Menyimpan daftar bulan-bulan untuk filter horizontal
+  // Menyimpan daftar bulan
   final List<DateTime> _listBulan = [];
 
   @override
   void initState() {
     super.initState();
     _scrollBulanController = ScrollController();
-    _siapkanDataBulan(); // Siapkan 12 bulan terakhir
+    _siapkanDataBulan();
 
-    // Menggulung scroll navigasi bulan ke paling kanan (bulan saat ini)
+    // menuju bulan ini
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollBulanController.hasClients) {
         _scrollBulanController.jumpTo(_scrollBulanController.position.maxScrollExtent);
@@ -36,7 +37,7 @@ class _GrafikPageState extends State<GrafikPage> {
     });
   }
 
-  // Membuat daftar rentang 12 bulan ke belakang terhitung dari bulan sekarang
+  // Membuat daftar rentang 12 bulan ke belakang
   void _siapkanDataBulan() {
     DateTime now = DateTime.now();
     for (int i = 11; i >= 0; i--) {
@@ -46,11 +47,11 @@ class _GrafikPageState extends State<GrafikPage> {
 
   @override
   void dispose() {
-    _scrollBulanController.dispose(); // Hapus scroll controller untuk mencegah memory leak
+    _scrollBulanController.dispose();
     super.dispose();
   }
 
-  // format rp
+  // format angka rp
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -63,7 +64,7 @@ class _GrafikPageState extends State<GrafikPage> {
     return hasil;
   }
 
-  // Map database warna statis untuk setiap jenis kategori agar chart bervariasi
+  // Map database warna
   final Map<String, Color> _warnaKategori = {
     'Makan': const Color(0xFFEF4444),
     'Minum': const Color(0xFFF97316),
@@ -75,7 +76,7 @@ class _GrafikPageState extends State<GrafikPage> {
     'Lainnya': const Color(0xFF9CA3AF),
   };
 
-  // Map database ikon statis untuk visualisasi daftar kategori
+  // Map database ikon 
   final Map<String, IconData> _ikonKategori = {
     'Makan': Icons.restaurant,
     'Minum': Icons.local_cafe,
@@ -102,7 +103,7 @@ class _GrafikPageState extends State<GrafikPage> {
       body: SafeArea(
         child: Column(
           children: [
-            /// 1. HEADER & TOGGLE PENGELUARAN/PEMASUKAN
+            // HEADER
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
               child: Center(
@@ -119,14 +120,14 @@ class _GrafikPageState extends State<GrafikPage> {
                         _isPengeluaran ? 'Pengeluaran' : 'Pemasukan',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
                       ),
-                      Icon(Icons.keyboard_arrow_down, color: textColor), // Panah penanda dropdown klik
+                      Icon(Icons.keyboard_arrow_down, color: textColor), // Panah v
                     ],
                   ),
                 ),
               ),
             ),
 
-            /// 2. NAVIGASI PILIHAN BULAN
+            // NAVIGASI PILIHAN BULAN
             Container(
               height: 50,
               decoration: BoxDecoration(
@@ -178,7 +179,7 @@ class _GrafikPageState extends State<GrafikPage> {
               ),
             ),
 
-            /// 3. KONTEN GRAFIK
+            // KONTEN GRAFIK MEMBACA DATA TRANSAKSI DARI FIRESTORE
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -255,7 +256,7 @@ class _GrafikPageState extends State<GrafikPage> {
                       children: [
                         const SizedBox(height: 30),
                         
-                        /// SEKTOR DONUT CHART (DIAGRAM LINGKARAN)
+                        // DIAGRAM LINGKARAN
                         SizedBox(
                           height: 220,
                           child: Stack(
@@ -269,7 +270,7 @@ class _GrafikPageState extends State<GrafikPage> {
                                   startDegreeOffset: 270,
                                 ),
                               ),
-                              // Total Teks bag. tengah
+                              // TOTAL TEKS
                               Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -283,7 +284,7 @@ class _GrafikPageState extends State<GrafikPage> {
                         
                         const SizedBox(height: 40),
 
-                        /// DAFTAR KATEGORI LENGKAP DENGAN PROGRES BAR PERSENTASE
+                        // DAFTAR KATEGORI
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           child: ListView.builder(
@@ -326,7 +327,7 @@ class _GrafikPageState extends State<GrafikPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
-                                          // Bar Indikator garis Penunjuk Persentase
+                                          // Bar Indikator Linear Horizontal Penunjuk Persentase
                                           ClipRRect(
                                             borderRadius: BorderRadius.circular(5),
                                             child: LinearProgressIndicator(

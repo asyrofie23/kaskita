@@ -185,20 +185,19 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                   const SizedBox(height: 20),
                   // Cari bagian ini dan ubah angkanya
                   const Text(
-                    'v1.9.0', // <--- Versi
+                    'v2.0.0', // <--- Versi
                     style: TextStyle(
                       fontSize: 12,
                       color: Colors.white70, // Sedikit dicerahkan biar estetik
                     ),
                   ),
                   const SizedBox(height: 8),
-                  // WATERMARK DEVELOPER
                   Text(
-                    '@ahmed_asyrofie',
+                    'CREATED BY @AHMED_ASYROFIE',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: Colors.white.withOpacity(0.8), // Sengaja dibikin lebih terang dikit biar eye-catching
+                      color: Colors.white.withOpacity(0.8),
                       letterSpacing: 1.5,
                     ),
                   ),

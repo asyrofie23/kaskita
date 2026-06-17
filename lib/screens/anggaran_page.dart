@@ -4,9 +4,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/transaksi.dart';
 import '../models/anggaran.dart';
 
-
+// Halaman Pengaturan Batas Anggaran
 class AnggaranPage extends StatefulWidget {
-
+  // Menerima data seluruh transaksi dari halaman utama untuk menghitung pengeluaran riil secara otomatis
   final List<Transaksi> semuaTransaksi;
 
   const AnggaranPage({super.key, required this.semuaTransaksi});
@@ -16,7 +16,7 @@ class AnggaranPage extends StatefulWidget {
 }
 
 class _AnggaranPageState extends State<AnggaranPage> {
-  // Format Rp
+  // Format nominal angka
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -267,7 +267,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
           );
         },
       ),
-      // Tombol +
+      // button +
       floatingActionButton: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).collection('anggaran').snapshots(),
         builder: (context, snapshot) {
@@ -285,16 +285,14 @@ class _AnggaranPageState extends State<AnggaranPage> {
     );
   }
 
-  // BOTTOM SHEET FORM - Untuk menambah atau mengedit data batas anggaran
+  //BottomSheet FORM
   void _tampilFormAnggaran(BuildContext context, bool isDark, {Anggaran? anggaranYangDiedit}) {
-    // Inisialisasi controller textfield dengan data lama (jika edit) atau kosong (jika buat baru)
     final TextEditingController namaController = TextEditingController(text: anggaranYangDiedit?.nama ?? '');
     final TextEditingController limitController = TextEditingController(
         text: anggaranYangDiedit != null ? anggaranYangDiedit.limit.toString() : '');
     String kategoriTerpilih = anggaranYangDiedit?.kategori ?? 'Semua Kategori';
     String periodeTerpilih = anggaranYangDiedit?.periode ?? 'MONTHLY';
-    double nilaiPeringatan = anggaranYangDiedit?.peringatan ?? 80.0;
-    bool isRollover = anggaranYangDiedit?.rollover ?? false;
+
 
     // Daftar pilihan kategori anggaran
     List<String> listKategori = ['Semua Kategori', 'Makan', 'Transportasi', 'Hiburan', 'Belanja'];
@@ -309,7 +307,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
           builder: (context, setSheetState) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom, // Mengangkat sheet saat keyboard muncul
+                bottom: MediaQuery.of(context).viewInsets.bottom,
                 left: 20, right: 20, top: 20,
               ),
               child: SingleChildScrollView(
@@ -403,7 +401,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Switch Rollover Sisa Anggaran (apakah memindahkan sisa uang ke periode berikutnya)
+                    // Switch Rollover Sisa Anggaran
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -426,7 +424,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 25),
 
-                    // Tombol Simpan Aksi Form (Dinamis: Simpan Perubahan / Buat Anggaran)
+                    // Tombol Simpan Aksi Form
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(

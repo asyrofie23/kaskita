@@ -333,7 +333,7 @@ class _ProfilPageState extends State<ProfilPage> {
             
               Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 5),
-              const Text('Versi 1.9.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
+              const Text('Versi 2.0.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
               Text(
                 'Aplikasi pencatatan keuangan pintar dengan fitur kolaborasi kas bersama secara real-time.',
@@ -388,7 +388,9 @@ class _ProfilPageState extends State<ProfilPage> {
         foregroundColor: textColor,
         elevation: 0,
         actions: [
-          // Tombol Saklar Pengubah Mode Tema
+
+          // button theme
+          
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orangeAccent : Colors.grey),
             onPressed: () {
@@ -475,7 +477,7 @@ class _ProfilPageState extends State<ProfilPage> {
                 children: [
 
                   // Informasi pengembang aplikasi
-                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.9.0', textColor, isDark, onTap: () {
+                  _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 2.0.0', textColor, isDark, onTap: () {
                     _tampilDialogTentang(context, isDark);
                   }),
                 ],

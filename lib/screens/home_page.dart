@@ -1,4 +1,4 @@
-import 'grafik_page.dart'; // <--- TAMBAHKAN INI
+import 'grafik_page.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +8,7 @@ import '../main.dart';
 import 'profil_page.dart';
 import 'anggaran_page.dart';
 
+
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -16,26 +17,26 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Controller untuk input teks nama transaksi/judul
+  // untuk input teks nama transaksi/judul
   final TextEditingController _judulController = TextEditingController();
-  // Controller untuk input teks nominal uang
+  //untuk input teks nominal uang
   final TextEditingController _nominalController = TextEditingController();
-  // Index tab navigasi bawah yang sedang aktif (0: Home, 1: Grafik, 2: Anggaran, 3: Profil)
+  // index tab navigasi
   int _pilihanTabSekarang = 0;
-  // Controller untuk mengontrol halaman/view di PageView
+  // untuk mengontrol halaman/view di PageView
   late PageController _pageController;
   
-  // Variabel untuk menyimpan bulan yang sedang dipilih (Default: Bulan ini)
+  // untuk menyimpan bulan yang sedang dipilih
   DateTime _bulanAktif = DateTime.now(); 
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi page controller sesuai tab awal
+    // page controller sesuai tab awal
     _pageController = PageController(initialPage: _pilihanTabSekarang);
   }
 
-  // Fungsi format RP
+  // format RP
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -101,7 +102,7 @@ class _HomePageState extends State<HomePage> {
           );
         }).toList();
 
-        // Menghitung total saldo
+        // Menghitung total saldo, total pemasukan, dan total pengeluaran dari list transaksi yang terfilter
         int totalPemasukan = 0;
         int totalPengeluaran = 0;
         for (var trx in listTransaksi) {
@@ -115,7 +116,7 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: bgColor,
-          // Tombol +
+          // button add
           floatingActionButton: FloatingActionButton(
             heroTag: null,
             backgroundColor: const Color(0xFF1D4ED8),
@@ -137,7 +138,7 @@ class _HomePageState extends State<HomePage> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildBottomNavItem(Icons.home, 'Home', 0),
-                  _buildBottomNavItem(Icons.pie_chart, 'Grafik', 1), // Menu Riwayat diubah jadi Grafik
+                  _buildBottomNavItem(Icons.pie_chart, 'Grafik', 1),
                   const SizedBox(width: 40),
                   _buildBottomNavItem(Icons.account_balance_wallet_outlined, 'Anggaran', 2),
                   _buildBottomNavItem(Icons.person_outline, 'Profil', 3),
@@ -170,7 +171,7 @@ class _HomePageState extends State<HomePage> {
     final user = FirebaseAuth.instance.currentUser;
     String namaSapaan = 'Pengguna Baru'; 
     
-    // Logika sapaan
+    // Logika sapaan nama pengguna secara dinamis dari akun yang terlogin
     if (user != null && !user.isAnonymous) {
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         namaSapaan = user.displayName!.split(' ')[0];
@@ -182,11 +183,13 @@ class _HomePageState extends State<HomePage> {
     }
 
     return SafeArea(
-      
+    
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // header n card
+
+          // header
+
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -205,15 +208,15 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Row(
                       children: [
-                        // Tombol dark/light mode
+                        // button theme
                         IconButton(
                           icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orangeAccent : Colors.grey),
                           onPressed: () {
                             themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
-                          },
+                          }, 
                         ),
-                        // notifikasi
-                        // Mengambil jumlah notifikasi yang belum dibaca dari database secara real-time
+                        // NOTIFIKASI
+                        // get unread notif
                         StreamBuilder<QuerySnapshot>(
                           stream: FirebaseFirestore.instance
                               .collection('users')
@@ -226,7 +229,7 @@ class _HomePageState extends State<HomePage> {
 
                             return Stack(
                               children: [
-                                // Tombol lonceng
+                                // button lonceng
                                 IconButton(
                                   icon: const Icon(Icons.notifications_none, size: 28),
                                   color: isDark ? Colors.white : Colors.black87,
@@ -251,14 +254,14 @@ class _HomePageState extends State<HomePage> {
                             );
                           }
                         ),
-                        // --- BATAS LONCENG ---
+                        
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
-                // KARTU SALDO
+                // KARTU SALDO BIRU
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -278,8 +281,7 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text('Total Saldo', style: TextStyle(color: Colors.white70, fontSize: 14)),
                           
-
-                          // Tombol <bulan>
+                          // button < >
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
@@ -322,7 +324,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // transaksi
+          // DAFTAR TRANSAKSi
           Expanded(
             child: listTransaksi.isEmpty
                 ? const Center(
@@ -335,10 +337,10 @@ class _HomePageState extends State<HomePage> {
                       final trx = listTransaksi[index];
                       final docId = docs[index].id;
 
-                      // Slide
+                      // SlidableTile untuk membungkus list item agar bisa digeser
                       return SlidableTile(
                         key: Key(docId),
-                        // Menangani aksi edit transaksi ketika digeser & diklik Edit
+                        // edit transaksi ketika digeser & diklik Edit
                         onEdit: () {
                           final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
                           final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
@@ -349,12 +351,11 @@ class _HomePageState extends State<HomePage> {
                             isPemasukanAwal: trx.isPemasukan, tanggalAwal: initialDate, kategoriAwal: trx.kategori,
                           );
                         },
-                        // Menangani aksi hapus transaksi ketika digeser & diklik Hapus
+                        // hapus transaksi ketika digeser & diklik Hapus
                         onDelete: () => _konfirmasiHapusTransaksi(context, docId, trx.judul),
                         child: GestureDetector(
-                          // Klik biasa pada item (edit)
+                          // Klik biasa pada item
                           onTap: () {
-                            
                             final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
                             final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
                                 ? rawTanggal.toDate() 
@@ -371,7 +372,7 @@ class _HomePageState extends State<HomePage> {
                               color: cardColor,
                               borderRadius: BorderRadius.circular(15),
                             ),
-                            child: Row(
+                            child: Row( //warna ikon merah hijo
                               children: [
                                 Container(
                                   padding: const EdgeInsets.all(12),
@@ -416,12 +417,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Fungsi menampilkan bottomsheet form transaksi
+  // tampilan bottom sheet form transaksi
   void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal, String? kategoriAwal}) {
     final bool isEditMode = docId != null;
 
     if (isEditMode) {
-      // Jika mode edit, isi form dengan data lama
+      // Jika mode edit catatan
       _judulController.text = judulAwal!;
       _nominalController.text = nominalAwal!.toString();
     } else {
@@ -431,7 +432,7 @@ class _HomePageState extends State<HomePage> {
     }
     bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
     
-    
+    // Logika Pintar: Jika nambah transaksi di bulan yang sudah lewat, kalender akan otomatis buka di bulan tersebut
     DateTime now = DateTime.now();
     DateTime defaultDate = (_bulanAktif.year == now.year && _bulanAktif.month == now.month) ? now : DateTime(_bulanAktif.year, _bulanAktif.month, 1);
     DateTime tanggalTerpilih = tanggalAwal ?? defaultDate;
@@ -603,7 +604,7 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D4ED8), padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      onPressed: () async { //fungsi simpan Transaksi
+                      onPressed: () async {
                         if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
                         final dataTransaksi = {
                           'judul': _judulController.text,
@@ -644,7 +645,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Fungsi pop-up nambah kategori baru
+  // Fungsi untuk menampilkan dialog pop-up untuk menambahkan kategori kustom baru
   void _tampilDialogTambahKategori(BuildContext context, bool isPemasukan, Function(String) onKategoriDitambahkan) {
     final TextEditingController kategoriController = TextEditingController();
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -682,7 +683,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Fungsi Bottomsheet untuk menampilkan daftar kategori untuk dikelola
+  // Fungsi Bottom Sheet untuk menampilkan daftar kategori kustom buatan user untuk dikelola
   void _tampilBottomSheetKelolaKategori(BuildContext context, bool isPemasukan, Function(String) onKategoriTerpilih) {
     showModalBottomSheet(
       context: context,
@@ -838,7 +839,7 @@ class _HomePageState extends State<HomePage> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              onPressed: () async { //fungsi del
+              onPressed: () async {
                 final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
                 await FirebaseFirestore.instance.collection('users').doc(uid).collection('transaksi').doc(docId).delete();
                 if (context.mounted) {
@@ -865,7 +866,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Widget helper untuk merender setiap item/tombol menu navigasi di bagian bawah
+  // Bottom navbar
   Widget _buildBottomNavItem(IconData icon, String title, int indexTarget) {
     final bool isSelected = _pilihanTabSekarang == indexTarget;
     return Expanded(
@@ -901,7 +902,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 // LACI NOTIFIKASI
-  // Fungsi Bottomsheet laci notif
+  // Fungsi Bottom Sheet laci notifikasi
   void _tampilLaciNotifikasi(BuildContext context, bool isDark) {
     showModalBottomSheet(
       context: context,
@@ -1001,7 +1002,7 @@ class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
   @override Animation<double> getScaleAnimation({required Animation<double> parent}) => const AlwaysStoppedAnimation(1.0);
 }
 
-// Widget Stateful Custom SlidableTile untuk membungkus list item transaksi agar bisa digeser (slide)
+// item transaksi bisa digeser (slide)
 class SlidableTile extends StatefulWidget {
   final Widget child;
   final VoidCallback onEdit;
