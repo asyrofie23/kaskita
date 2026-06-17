@@ -330,7 +330,7 @@ class _HomePageState extends State<HomePage> {
                 ? const Center(
                     child: Text('Belum ada transaksi di bulan ini, bre.'),
                   )
-                : ListView.builder(
+                : ListView.builder( //kartu catatan
                     padding: const EdgeInsets.symmetric(horizontal: 20),
                     itemCount: listTransaksi.length,
                     itemBuilder: (context, index) {
@@ -874,7 +874,7 @@ class _HomePageState extends State<HomePage> {
         behavior: HitTestBehavior.opaque,
         onTap: () {
           setState(() => _pilihanTabSekarang = indexTarget);
-          _pageController.animateToPage(
+          _pageController.animateToPage( //bottom navbar tetap ada ditiap hal.
             indexTarget,
             duration: const Duration(milliseconds: 300),
             curve: Curves.easeInOut,

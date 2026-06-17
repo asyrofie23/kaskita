@@ -4,9 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/transaksi.dart';
 import '../models/anggaran.dart';
 
-// Halaman Pengaturan Batas Anggaran
+// halaman
 class AnggaranPage extends StatefulWidget {
-  // Menerima data seluruh transaksi dari halaman utama untuk menghitung pengeluaran riil secara otomatis
   final List<Transaksi> semuaTransaksi;
 
   const AnggaranPage({super.key, required this.semuaTransaksi});
@@ -16,7 +15,7 @@ class AnggaranPage extends StatefulWidget {
 }
 
 class _AnggaranPageState extends State<AnggaranPage> {
-  // Format nominal angka
+  // Format Rp
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -142,7 +141,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
             );
           }
 
-          // TAMPILAN UTAMA - jika data anggaran tersedia di Firestore
+          // TAMPILAN UTAMA
           return ListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: docs.length,
@@ -155,8 +154,6 @@ class _AnggaranPageState extends State<AnggaranPage> {
                 limit: data['limit'] ?? 0,
                 kategori: data['kategori'] ?? 'Semua Kategori',
                 periode: data['periode'] ?? 'MONTHLY',
-                peringatan: (data['peringatan'] ?? 80.0).toDouble(),
-                rollover: data['rollover'] ?? false,
               );
 
               // Menghitung data keuangan yang terpakai dan sisa limit anggaran
@@ -167,7 +164,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
               // Logika warna bar indikator progres sesuai persentase terpakai
               Color barColor = persenTerpakai >= 1.0 
                   ? Colors.red
-                  : (persenTerpakai >= (anggaran.peringatan / 100) ? Colors.orange : const Color(0xFF2563EB)); // Jingga/Biru jika aman
+                  : (persenTerpakai >= 0.8 ? Colors.orange : const Color(0xFF2563EB)); // Jingga/Biru jika aman
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 15),
@@ -375,55 +372,6 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Slider untuk menetapkan persentase Peringatan Limit
-                    Container(
-                      padding: const EdgeInsets.all(15),
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF1E293B) : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Peringatan Limit: ${nilaiPeringatan.toInt()}%', style: const TextStyle(fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 5),
-                          const Text('Notifikasi peringatan akan muncul jika sisa limit Anda hampir habis.', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                          Slider(
-                            value: nilaiPeringatan,
-                            min: 50,
-                            max: 100,
-                            divisions: 10,
-                            activeColor: const Color(0xFF2563EB),
-                            onChanged: (val) => setSheetState(() => nilaiPeringatan = val),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Switch Rollover Sisa Anggaran
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Rollover Sisa Anggaran', style: TextStyle(fontWeight: FontWeight.bold)),
-                              SizedBox(height: 4),
-                              Text('Sisa anggaran bulan sebelumnya akan dipindahkan ke periode anggaran berikutnya.', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                            ],
-                          ),
-                        ),
-                        Switch(
-                          value: isRollover,
-                          activeColor: const Color(0xFF2563EB),
-                          onChanged: (val) => setSheetState(() => isRollover = val),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 25),
-
                     // Tombol Simpan Aksi Form
                     SizedBox(
                       width: double.infinity,
@@ -443,8 +391,6 @@ class _AnggaranPageState extends State<AnggaranPage> {
                             'limit': int.parse(limitController.text),
                             'kategori': kategoriTerpilih,
                             'periode': periodeTerpilih,
-                            'peringatan': nilaiPeringatan,
-                            'rollover': isRollover,
                           };
 
                           if (anggaranYangDiedit != null) {
