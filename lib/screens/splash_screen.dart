@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'home_page.dart';
@@ -11,34 +12,41 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+  // Controller untuk mengontrol jalannya animasi logo
   late AnimationController _controller;
+  // Animasi untuk efek pudar (fade-in) logo dan teks
   late Animation<double> _fadeAnimation;
+  // Animasi untuk efek pembesaran (zoom/scale-in) logo
   late Animation<double> _scaleAnimation;
 
   @override
   void initState() {
     super.initState();
 
+    // Menginisialisasi controller animasi dengan durasi 1.5 detik
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1500),
     );
 
+    // Animasi perubahan opacity dari transparan ke penuh (0.0 ke 1.0)
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
+    // Animasi pembesaran dari ukuran 80% ke 100% dengan efek membal (elastic out)
     _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
     );
 
+    // Memulai jalannya animasi logo
     _controller.forward();
 
-    // Panggil fungsi cek KTP di balik layar
+    // Panggil fungsi cek status masuk pengguna secara async
     _siapkanAkunLaluPindah();
   }
 
-  // Fungsi baru untuk cek status login & bikin akun Anonim
+  // Fungsi untuk cek status login & buat akun tamu secara otomatis jika belum login
   Future<void> _siapkanAkunLaluPindah() async {
     try {
       // Tunggu animasi splash screen minimal 3 detik biar estetik
@@ -50,6 +58,17 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       // Kalau benar-benar belum punya, buatkan akun Tamu (Anonim) diam-diam
       if (currentUser == null) {
         await FirebaseAuth.instance.signInAnonymously();
+      }
+
+      // Re-fetch user dan buat/update profil fisik di Firestore agar UID langsung terdaftar di dashboard
+      currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).set({
+          'uid': currentUser.uid,
+          'email': currentUser.email,
+          'nama': currentUser.displayName ?? 'Tamu',
+          'terakhir_aktif': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
 
       // Setelah KTP siap, langsung pindah ke HomePage
@@ -150,7 +169,6 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
                 ),
               ),
             ),
-            // Loading Indikator di Bagian Bawah
             // Loading Indikator di Bagian Bawah
             Positioned(
               bottom: 40, // Agak diturunin dikit biar nggak terlalu mepet ke tengah

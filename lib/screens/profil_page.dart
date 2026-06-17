@@ -1,6 +1,3 @@
-// =========================================================
-// FILE: lib/screens/profil_page.dart
-// =========================================================
 import 'grup_detail_page.dart';
 import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -19,45 +16,58 @@ class ProfilPage extends StatefulWidget {
 
 class _ProfilPageState extends State<ProfilPage> {
 
-  /// --- FUNGSI LOGIN GOOGLE ---
+  // Proses masuk google
   Future<void> _loginGoogle(BuildContext context) async {
     try {
+      // Inisialisasi Google Sign-In SDK
       await GoogleSignIn.instance.initialize();
+      // Buka pop-up pilihan akun Google user
       final GoogleSignInAccount? googleUser = await GoogleSignIn.instance.authenticate();
-      if (googleUser == null) return; 
+      if (googleUser == null) return; // Batalkan jika user tidak jadi memilih akun
 
+      // Dapatkan token otentikasi dari akun Google terpilih
       final GoogleSignInAuthentication googleAuth = googleUser.authentication;
 
+      // Berikan izin scope akses email dan profil dasar
       final authClient = googleUser.authorizationClient;
       final clientAuth = await authClient.authorizeScopes(['email', 'profile']);
       final String? accessToken = clientAuth.accessToken;
 
+      // Konversi token menjadi OAuthCredential agar dikenali oleh Firebase
       final OAuthCredential credential = GoogleAuthProvider.credential(
         accessToken: accessToken,
         idToken: googleAuth.idToken,
       );
 
-      // Cek apakah user saat ini pakai akun Tamu (Anonim)
+      // Ambil data user yang sedang aktif saat ini (apakah akun Tamu/Anonim)
       User? currentUser = FirebaseAuth.instance.currentUser;
       
       if (currentUser != null && currentUser.isAnonymous) {
         try {
-          // JURUS 1: Coba upgrade akun tamu menjadi akun Google
+          // Lakukan upgrade akun Tamu menjadi akun Google (menghubungkan data kas lokal ke akun Google)
           await currentUser.linkWithCredential(credential);
           debugPrint("Berhasil menyambungkan akun Tamu ke Google!");
         } on FirebaseAuthException catch (e) {
-          // Jika akun Google sudah pernah terdaftar sebelumnya
+          // Jika email Google tersebut sudah pernah login sebelumnya di HP lain
           if (e.code == 'credential-already-in-use') {
             debugPrint("Akun Google sudah ada, beralih ke login biasa...");
-            // JURUS 2: Hapus KTP Tamu, langsung login pakai Google yang sudah ada
+            // Langsung login biasa menggunakan Google Credential (data lokal terhapus/ganti data Google)
             await FirebaseAuth.instance.signInWithCredential(credential);
           } else {
-            rethrow; // Lempar error lain kalau ada
+            rethrow; // Teruskan error lain jika terjadi hal di luar dugaan
           }
         }
-      } else {
-        // Kalau bukan tamu, login Google biasa
-        await FirebaseAuth.instance.signInWithCredential(credential);
+      }
+
+      // Buat/update profil fisik user di Firestore saat login dengan Google
+      currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).set({
+          'uid': currentUser.uid,
+          'email': currentUser.email,
+          'nama': currentUser.displayName ?? currentUser.email?.split('@')[0] ?? 'Pengguna Google',
+          'terakhir_aktif': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
       }
 
       if (context.mounted) {
@@ -74,16 +84,17 @@ class _ProfilPageState extends State<ProfilPage> {
     }
   }
 
-  /// --- FUNGSI LOGOUT ---
+  // LOGOUT
+  // Mengeluarkan sesi user dari Google dan Firebase Auth
   Future<void> _logout(BuildContext context) async {
-    await GoogleSignIn.instance.signOut();
-    await FirebaseAuth.instance.signOut();
+    await GoogleSignIn.instance.signOut(); // Logout dari Google
+    await FirebaseAuth.instance.signOut(); // Logout dari Firebase
     
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Berhasil Logout')),
       );
-      // Tendang balik ke Splash Screen biar dapat KTP Tamu baru
+      // Arahkan kembali user ke Splash Screen agar dibuatkan akun tamu baru otomatis
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const SplashScreen()),
@@ -92,10 +103,11 @@ class _ProfilPageState extends State<ProfilPage> {
     }
   }
 
-  /// --- POP-UP BUAT CATATAN BERSAMA ---
+  // PU catatan Bers.
+  // Dialog form untuk membuat grup kas baru di mana pembuat otomatis menjadi Admin
   void _tampilDialogBuatCatatan(BuildContext context, bool isDark) {
     final TextEditingController namaGrupController = TextEditingController();
-    bool isLoading = false;
+    bool isLoading = false; // Flag status loading untuk tombol submit
 
     showDialog(
       context: context,
@@ -111,6 +123,7 @@ class _ProfilPageState extends State<ProfilPage> {
                 children: [
                   Text('Kamu akan menjadi Admin. Silakan beri nama untuk grup catatan ini.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
                   const SizedBox(height: 15),
+                  // Input nama grup kas
                   TextField(
                     controller: namaGrupController,
                     style: TextStyle(color: isDark ? Colors.white : Colors.black87),
@@ -123,14 +136,16 @@ class _ProfilPageState extends State<ProfilPage> {
                 ],
               ),
               actions: [
+                // Tombol Batal
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                // Tombol Buat Grup (Mengirim data ke Firebase Firestore)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
                   onPressed: isLoading ? null : () async {
                     final String namaGrup = namaGrupController.text.trim();
                     if (namaGrup.isEmpty) return;
 
-                    // 1. Cek apakah user adalah tamu
+                    // 1. Cek status keanggotaan (Akun Tamu dilarang membuat grup)
                     final user = FirebaseAuth.instance.currentUser;
                     if (user == null || user.isAnonymous) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harus hubungkan ke Google dulu buat bikin grup!'), backgroundColor: Colors.red));
@@ -138,11 +153,11 @@ class _ProfilPageState extends State<ProfilPage> {
                       return;
                     }
 
-                    // 2. Nyalakan loading
+                    // 2. Nyalakan status loading di dialog
                     setDialogState(() => isLoading = true);
 
                     try {
-                      // 3. Generate Kode Acak (KAS-XXXXX)
+                      // 3. Generate Kode Undangan Acak (KAS-XXXXX)
                       const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
                       final rnd = Random();
                       String kode = 'KAS-';
@@ -150,7 +165,7 @@ class _ProfilPageState extends State<ProfilPage> {
                         kode += chars[rnd.nextInt(chars.length)];
                       }
 
-                      // 4. Simpan ke Firestore di koleksi khusus 'grup_kas'
+                      // 4. Daftarkan dan simpan grup kas baru di database Firestore
                       String namaUser = user.displayName ?? user.email?.split('@')[0] ?? 'Admin';
                       
                       await FirebaseFirestore.instance.collection('grup_kas').doc(kode).set({
@@ -158,12 +173,15 @@ class _ProfilPageState extends State<ProfilPage> {
                         'kode_undangan': kode,
                         'dibuat_pada': FieldValue.serverTimestamp(),
                         'admin_uid': user.uid,
+                        // Menentukan peran/role anggota (pembuat diset sebagai Admin)
                         'anggota': {
                           user.uid: 'Admin'
                         },
+                        // Menyimpan nama representasi setiap anggota
                         'nama_anggota': { 
                           user.uid: namaUser
                         },
+                        // Array untuk mempermudah query pencarian grup kas user
                         'id_anggota': [user.uid]
                       });
 
@@ -184,16 +202,17 @@ class _ProfilPageState extends State<ProfilPage> {
                 ),
               ],
             );
-          }
+          },
         );
       },
     );
   }
 
-  /// --- POP-UP GABUNG CATATAN ---
+  // Pu gabung
+  // Dialog form untuk bergabung ke dalam grup kas yang sudah ada via kode undangan
   void _tampilDialogGabungCatatan(BuildContext context, bool isDark) {
     final TextEditingController kodeController = TextEditingController();
-    bool isLoading = false;
+    bool isLoading = false; // Flag loading submit
 
     showDialog(
       context: context,
@@ -209,10 +228,11 @@ class _ProfilPageState extends State<ProfilPage> {
                 children: [
                   Text('Masukkan kode undangan dari Admin untuk bergabung ke dalam grup.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
                   const SizedBox(height: 15),
+                  // Input Kode Undangan (KAS-XXXXX)
                   TextField(
                     controller: kodeController,
                     textAlign: TextAlign.center,
-                    textCapitalization: TextCapitalization.characters, // Biar otomatis huruf besar
+                    textCapitalization: TextCapitalization.characters, // Otomatis input huruf kapital
                     style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontSize: 20, letterSpacing: 2, fontWeight: FontWeight.bold),
                     decoration: InputDecoration(
                       hintText: 'KAS-XXXXX',
@@ -223,14 +243,16 @@ class _ProfilPageState extends State<ProfilPage> {
                 ],
               ),
               actions: [
+                // Tombol Batal
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                // Tombol Gabung (Melakukan validasi kode & pendaftaran di Firestore)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
                   onPressed: isLoading ? null : () async {
                     final String kode = kodeController.text.trim().toUpperCase();
                     if (kode.isEmpty) return;
 
-                    // 1. Cek apakah user adalah tamu
+                    // 1. Validasi: Akun Tamu dilarang gabung grup kas kolaborasi
                     final user = FirebaseAuth.instance.currentUser;
                     if (user == null || user.isAnonymous) {
                       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Harus hubungkan ke Google dulu buat gabung grup!'), backgroundColor: Colors.red));
@@ -238,22 +260,22 @@ class _ProfilPageState extends State<ProfilPage> {
                       return;
                     }
 
-                    // 2. Nyalakan loading
+                    // 2. Aktifkan loading
                     setDialogState(() => isLoading = true);
 
                     try {
-                      // 3. Cari grup berdasarkan ID dokumen (kode undangan)
+                      // 3. Cek ketersediaan dokumen grup berdasarkan ID kode di Firestore
                       final docRef = FirebaseFirestore.instance.collection('grup_kas').doc(kode);
                       final docSnap = await docRef.get();
 
                       if (docSnap.exists) {
-                        // 4. Grup ditemukan! Tambahkan UID dan Nama user
+                        // 4. Jika ditemukan: Tambahkan UID user sebagai Editor dan rekam namanya
                         String namaUser = user.displayName ?? user.email?.split('@')[0] ?? 'Anggota';
 
                         await docRef.update({
-                          'anggota.${user.uid}': 'Editor', 
-                          'nama_anggota.${user.uid}': namaUser, // <--- TAMBAHAN: Simpan nama temenmu
-                          'id_anggota': FieldValue.arrayUnion([user.uid])
+                          'anggota.${user.uid}': 'Editor', // Mengatur role baru sebagai Editor
+                          'nama_anggota.${user.uid}': namaUser, // Rekam nama user di grup
+                          'id_anggota': FieldValue.arrayUnion([user.uid]) // Tambah UID ke array indeks anggota
                         });
 
                         if (context.mounted) {
@@ -261,7 +283,7 @@ class _ProfilPageState extends State<ProfilPage> {
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Berhasil bergabung ke grup!'), backgroundColor: Colors.green));
                         }
                       } else {
-                        // Grup tidak ditemukan
+                        // Grup tidak ditemukan (ID dokumen salah)
                         setDialogState(() => isLoading = false);
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Kode tidak valid atau grup tidak ditemukan.'), backgroundColor: Colors.red));
@@ -286,7 +308,7 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-/// --- POP-UP TENTANG KASKITA ---
+  // About
   void _tampilDialogTentang(BuildContext context, bool isDark) {
     showDialog(
       context: context,
@@ -298,7 +320,7 @@ class _ProfilPageState extends State<ProfilPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Logo Aplikasi
+              // Logo Kaskita
               Container(
                 padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
@@ -308,12 +330,11 @@ class _ProfilPageState extends State<ProfilPage> {
                 child: const Icon(Icons.account_balance_wallet, size: 50, color: Color(0xFF2563EB)),
               ),
               const SizedBox(height: 15),
-              // Nama Aplikasi & Versi
+            
               Text('KasKita', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22, color: isDark ? Colors.white : Colors.black87)),
               const SizedBox(height: 5),
-              const Text('Versi 1.9.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)), // <--- Versi
+              const Text('Versi 1.9.0', style: TextStyle(color: Color(0xFF2563EB), fontWeight: FontWeight.bold)),
               const SizedBox(height: 15),
-              // Deskripsi
               Text(
                 'Aplikasi pencatatan keuangan pintar dengan fitur kolaborasi kas bersama secara real-time.',
                 textAlign: TextAlign.center,
@@ -322,7 +343,6 @@ class _ProfilPageState extends State<ProfilPage> {
               const SizedBox(height: 20),
               Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
               const SizedBox(height: 10),
-              // Credit Developer
               const Text('Dikembangkan oleh:', style: TextStyle(fontSize: 11, color: Colors.grey)),
               const SizedBox(height: 5),
               const Text(
@@ -331,10 +351,10 @@ class _ProfilPageState extends State<ProfilPage> {
               ),
               const Text('202369040078', style: TextStyle(fontWeight: FontWeight.bold,fontSize: 14,letterSpacing: 1.2, color: Colors.grey)),
               const SizedBox(height: 5),
-          
             ],
           ),
           actions: [
+            // bottom close about
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
@@ -351,6 +371,7 @@ class _ProfilPageState extends State<ProfilPage> {
       },
     );
   }
+
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
@@ -360,15 +381,18 @@ class _ProfilPageState extends State<ProfilPage> {
 
     return Scaffold(
       backgroundColor: bgColor,
+      // AppBar dengan judul dan tombol toggle saklar tema (Terang / Gelap)
       appBar: AppBar(
         title: const Text('Profil & Pengaturan', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: bgColor,
         foregroundColor: textColor,
         elevation: 0,
         actions: [
+          // Tombol Saklar Pengubah Mode Tema
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orangeAccent : Colors.grey),
             onPressed: () {
+              // Mengubah nilai notifier global tema
               themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
             },
           ),
@@ -379,9 +403,7 @@ class _ProfilPageState extends State<ProfilPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            /// ==========================================
-            /// 1. KARTU IDENTITAS (PANTAU STATUS LOGIN)
-            /// ==========================================
+            // KARTU IDENTITAS
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(20),
@@ -390,33 +412,29 @@ class _ProfilPageState extends State<ProfilPage> {
                 borderRadius: BorderRadius.circular(15),
                 boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
               ),
-              // StreamBuilder memantau perubahan status login secara real-time
+              // StreamBuilder memantau status sesi login Firebase secara realtime
               child: StreamBuilder<User?>(
                 stream: FirebaseAuth.instance.authStateChanges(),
                 builder: (context, snapshot) {
-                  // Jika masih loading ngecek status
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // Ambil data user
                   final User? user = snapshot.data;
 
-                  // Jika user belum login, tampilkan tombol login
+                  // Jika data user null (belum login sama sekali)
                   if (user == null) {
                     return _buildBelumLogin(context, textColor);
                   }
 
-                  // Jika sudah login, tampilkan info profilnya
+                  // Jika sudah terdeteksi login (baik Tamu maupun Google)
                   return _buildSudahLogin(context, user, textColor, isDark);
                 },
               ),
             ),
             const SizedBox(height: 25),
 
-            /// ==========================================
-            /// 2. MENU CATATAN BERSAMA
-            /// ==========================================
+            // FITUR CATATAN BERSAMA
             const Text('Catatan Bersama', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
             const SizedBox(height: 10),
             Container(
@@ -427,27 +445,24 @@ class _ProfilPageState extends State<ProfilPage> {
               ),
               child: Column(
                 children: [
+                  // Listtile pemicu dialog gabung grup kas via kode
                   _buildMenuTile(Icons.group_add_outlined, 'Gabung Catatan via Kode', 'Masukkan kode undangan', textColor, isDark, onTap: () {
                     _tampilDialogGabungCatatan(context, isDark);
                   }),
                   Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
                   
-                  // COLOKIN MESINNYA DI SINI
+                  // Listtile pemicu dialog buat grup kas baru
                   _buildMenuTile(Icons.add_box_outlined, 'Buat Catatan Bersama', 'Jadi admin dan undang teman', textColor, isDark, onTap: () {
                     _tampilDialogBuatCatatan(context, isDark);
                   }),
                 ],
               ),
             ),
-            /// ==========================================
-            /// DAFTAR GRUP SAYA (TAMBAHAN BARU)
-            /// ==========================================
 
+            // DAFTAR GRUP SAYA
             _buildDaftarGrupSaya(context, cardColor, textColor, isDark),
 
-            /// ==========================================
-            /// 3. PENGATURAN UMUM
-            /// ==========================================
+            // PENGATURAN UMUM
             const Text('Pengaturan Umum', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
             const SizedBox(height: 10),
             Container(
@@ -458,10 +473,11 @@ class _ProfilPageState extends State<ProfilPage> {
               ),
               child: Column(
                 children: [
-                  _buildMenuTile(Icons.download_outlined, 'Ekspor Laporan (PDF/CSV)', 'Unduh riwayat transaksi', textColor, isDark, onTap: () {}),
-                  Divider(height: 1, color: isDark ? Colors.white12 : Colors.grey.shade200),
+
+                  // Informasi pengembang aplikasi
                   _buildMenuTile(Icons.info_outline, 'Tentang KasKita', 'Versi 1.9.0', textColor, isDark, onTap: () {
-                    _tampilDialogTentang(context, isDark);}),
+                    _tampilDialogTentang(context, isDark);
+                  }),
                 ],
               ),
             ),
@@ -471,7 +487,7 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
-  /// TAMPILAN JIKA BELUM LOGIN
+  /// WIDGET HELPER: TAMPILAN JIKA USER BELUM LOGIN
   Widget _buildBelumLogin(BuildContext context, Color textColor) {
     return Column(
       children: [
@@ -487,6 +503,7 @@ class _ProfilPageState extends State<ProfilPage> {
         const SizedBox(height: 20),
         SizedBox(
           width: double.infinity,
+          // Tombol login menginisiasi otentikasi Google
           child: ElevatedButton.icon(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
@@ -497,35 +514,38 @@ class _ProfilPageState extends State<ProfilPage> {
                 side: BorderSide(color: Colors.grey.shade300),
               ),
             ),
-            // Pakai icon bawaan internet biar cepat
             icon: Image.network('https://cdn-icons-png.flaticon.com/512/300/300221.png', height: 20), 
             label: const Text('Login dengan Google', style: TextStyle(fontWeight: FontWeight.bold)),
-            onPressed: () => _loginGoogle(context), // PANGGIL FUNGSI LOGIN
+            onPressed: () => _loginGoogle(context),
           ),
         ),
       ],
     );
   }
 
+  // WIDGET HELPER: TAMPILAN JIKA USER SUDAH LOGIN (Mendukung Akun Google dan Akun Tamu)
   Widget _buildSudahLogin(BuildContext context, User user, Color textColor, bool isDark) {
-    bool isGuest = user.isAnonymous;
+    bool isGuest = user.isAnonymous; // Cek apakah sesi aktif merupakan Akun Tamu
     
-    // Tentukan nama yang akan ditampilkan
+    // Logika penentuan nama panggilan yang dipajang di profil
     String namaTampil = 'Pengguna';
     if (isGuest) {
       namaTampil = 'Akun Tamu (Guest Mode)';
     } else if (user.displayName != null && user.displayName!.isNotEmpty) {
       namaTampil = user.displayName!;
     } else if (user.email != null && user.email!.isNotEmpty) {
-      namaTampil = user.email!.split('@')[0]; // Ambil dari email
+      namaTampil = user.email!.split('@')[0];
     }
+
     return Column(
       children: [
+        // Deteksi klik pada area profil untuk mengubah nama panggilan (khusus non-tamu)
         GestureDetector(
           onTap: isGuest ? null : () => _tampilDialogUbahNama(context, isDark),
           behavior: HitTestBehavior.opaque,
           child: Column(
             children: [
+              // Foto profil user (lingkaran bulat)
               CircleAvatar(
                 radius: 40,
                 backgroundColor: Colors.grey.shade300,
@@ -542,12 +562,12 @@ class _ProfilPageState extends State<ProfilPage> {
                   ),
                   if (!isGuest) ...[
                     const SizedBox(width: 8),
-                    Icon(Icons.edit, size: 16, color: isDark ? Colors.white70 : Colors.black54),
+                    Icon(Icons.edit, size: 16, color: isDark ? Colors.white70 : Colors.black54), // Ikon edit
                   ],
                 ],
               ),
               const SizedBox(height: 5),
-              // Ambil email dari akun Google/Tamu
+              // Email user atau status akun
               Text(
                 isGuest ? 'Data disimpan lokal di perangkat ini' : (user.email ?? '-'),
                 style: const TextStyle(color: Colors.grey, fontSize: 12),
@@ -555,6 +575,7 @@ class _ProfilPageState extends State<ProfilPage> {
             ],
           ),
         ),
+        // Jika statusnya Tamu, munculkan tombol ajakan upgrade akun ke Google
         if (isGuest) ...[
           const SizedBox(height: 15),
           SizedBox(
@@ -579,7 +600,7 @@ class _ProfilPageState extends State<ProfilPage> {
           ),
         ],
         
-        // --- TAMBAHKAN IF (!isGuest) DI SINI ---
+        // Jika statusnya terhubung Google, munculkan tombol Logout
         if (!isGuest) ...[
           const SizedBox(height: 20),
           SizedBox(
@@ -596,7 +617,7 @@ class _ProfilPageState extends State<ProfilPage> {
               ),
               icon: const Icon(Icons.logout),
               label: const Text('Logout', style: TextStyle(fontWeight: FontWeight.bold)),
-              onPressed: () => _logout(context), // PANGGIL FUNGSI LOGOUT
+              onPressed: () => _logout(context),
             ),
           ),
         ],
@@ -604,6 +625,7 @@ class _ProfilPageState extends State<ProfilPage> {
     );
   }
 
+  // WIDGET HELPER: Membuat baris menu pengaturan (ListTile) secara dinamis
   Widget _buildMenuTile(IconData icon, String title, String subtitle, Color textColor, bool isDark, {required VoidCallback onTap}) {
     return ListTile(
       leading: Container(
@@ -620,18 +642,19 @@ class _ProfilPageState extends State<ProfilPage> {
       onTap: onTap,
     );
   }
-  /// --- TAMPILAN DAFTAR GRUP SAYA ---
+
+  // Menampilkan list grup kas yang diikuti user dengan memanfaatkan query Firestore realtime
   Widget _buildDaftarGrupSaya(BuildContext context, Color cardColor, Color textColor, bool isDark) {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null || user.isAnonymous) return const SizedBox.shrink(); // Sembunyikan kalau mode tamu
+    if (user == null || user.isAnonymous) return const SizedBox.shrink(); // Sembunyikan jika akun Tamu
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Grup Saya', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.grey)),
         const SizedBox(height: 10),
+        // Query grup_kas di mana UID user terdaftar di array id_anggota
         StreamBuilder<QuerySnapshot>(
-          // Cari grup yang di dalam array 'id_anggota'-nya terdapat UID user saat ini
           stream: FirebaseFirestore.instance
               .collection('grup_kas')
               .where('id_anggota', arrayContains: user.uid)
@@ -643,6 +666,7 @@ class _ProfilPageState extends State<ProfilPage> {
 
             final docs = snapshot.data?.docs ?? [];
 
+            // Jika user belum memiliki atau bergabung ke grup manapun
             if (docs.isEmpty) {
               return Container(
                 width: double.infinity,
@@ -652,7 +676,7 @@ class _ProfilPageState extends State<ProfilPage> {
               );
             }
 
-            // Tampilkan list grup
+            // ListView daftar grup kas
             return ListView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
@@ -664,35 +688,34 @@ class _ProfilPageState extends State<ProfilPage> {
                 final role = data['anggota'][user.uid] ?? 'Anggota';
 
                 return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(15),
-                    boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
-                      child: const Icon(Icons.wallet, color: Color(0xFF2563EB)),
-                    ),
-                    title: Text(namaGrup, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                    subtitle: Text('Kode: $kode • Peran: $role', style: const TextStyle(fontSize: 12, color: Colors.grey)),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
-                    
-                    onTap: () {
-                      // BUKA HALAMAN DETAIL GRUP
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => GrupDetailPage(
-                            kodeGrup: kode,
-                            namaGrup: namaGrup,
-                            roleUser: role,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
+                   margin: const EdgeInsets.only(bottom: 10),
+                   decoration: BoxDecoration(
+                     color: cardColor,
+                     borderRadius: BorderRadius.circular(15),
+                     boxShadow: isDark ? [] : [BoxShadow(color: Colors.grey.withOpacity(0.1), blurRadius: 10)],
+                   ),
+                   child: ListTile(
+                     leading: CircleAvatar(
+                       backgroundColor: const Color(0xFF2563EB).withOpacity(0.1),
+                       child: const Icon(Icons.wallet, color: Color(0xFF2563EB)),
+                     ),
+                     title: Text(namaGrup, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
+                     subtitle: Text('Kode: $kode • Peran: $role', style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                     trailing: const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey),
+                     onTap: () {
+                       // Navigasi masuk ke halaman Detail Grup
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(
+                           builder: (context) => GrupDetailPage(
+                             kodeGrup: kode,
+                             namaGrup: namaGrup,
+                             roleUser: role,
+                           ),
+                         ),
+                       );
+                     },
+                   ),
                 );
               },
             );
@@ -702,12 +725,13 @@ class _ProfilPageState extends State<ProfilPage> {
       ],
     );
   }
-  // --- POP-UP UBAH NAMA PROFIL ---
+
+  // Dialog untuk mengubah nama user dan mensinkronisasikannya ke semua grup kas terkait
   void _tampilDialogUbahNama(BuildContext context, bool isDark) {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null || user.isAnonymous) return;
 
-    // Siapkan kotak input, otomatis diisi dengan nama yang sekarang
+    // Prefill input dengan nama saat ini
     final TextEditingController _namaController = TextEditingController(
         text: user.displayName ?? user.email?.split('@')[0] ?? '');
     bool isLoading = false;
@@ -726,6 +750,7 @@ class _ProfilPageState extends State<ProfilPage> {
                 children: [
                   Text('Nama ini akan terlihat oleh semua anggota di grup patunganmu.', style: TextStyle(color: isDark ? Colors.white70 : Colors.black54, fontSize: 13)),
                   const SizedBox(height: 15),
+                  // Input nama baru
                   TextField(
                     controller: _namaController,
                     style: TextStyle(color: isDark ? Colors.white : Colors.black87),
@@ -738,41 +763,41 @@ class _ProfilPageState extends State<ProfilPage> {
                 ],
               ),
               actions: [
+                // Tombol Batal
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
+                // Tombol Simpan (Melakukan update batch di Firebase Auth & Firestore)
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
                   onPressed: isLoading ? null : () async {
                     final String namaBaru = _namaController.text.trim();
-                    // Kalau namanya kosong atau nggak berubah, batalkan
                     if (namaBaru.isEmpty || namaBaru == user.displayName) return;
 
                     setDialogState(() => isLoading = true);
 
                     try {
-                      // 1. UPDATE DI AKUN UTAMA (FIREBASE AUTH)
+                      // 1. Update nama profil di Firebase Auth (akun utama)
                       await user.updateDisplayName(namaBaru);
 
-                      // 2. CARI SEMUA GRUP YANG DIIKUTI USER INI
+                      // 2. Ambil seluruh grup kas di mana user terdaftar
                       final grupSnap = await FirebaseFirestore.instance
                           .collection('grup_kas')
                           .where('id_anggota', arrayContains: user.uid)
                           .get();
 
-                      // 3. SIAPKAN MESIN BATCH (SAPU JAGAT)
+                      // 3. Gunakan Firestore Batch untuk meng-update nama secara serentak (atomic update)
                       final batch = FirebaseFirestore.instance.batch();
                       for (var doc in grupSnap.docs) {
-                        // Update nama di masing-masing grup
                         batch.update(doc.reference, {
                           'nama_anggota.${user.uid}': namaBaru
                         });
                       }
                       
-                      // Eksekusi pembaruan serentak!
+                      // Eksekusi seluruh batch update
                       await batch.commit();
 
                       if (context.mounted) {
                         Navigator.pop(context);
-                        // Render ulang halaman profil biar namanya langsung berubah di layar
+                        // Trigger rebuild UI halaman profil agar nama ter-update
                         setState(() {}); 
                         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nama berhasil diubah dan disinkronisasi!'), backgroundColor: Colors.green));
                       }

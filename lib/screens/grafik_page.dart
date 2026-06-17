@@ -1,6 +1,3 @@
-// =========================================================
-// FILE: lib/screens/grafik_page.dart
-// =========================================================
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -15,21 +12,23 @@ class GrafikPage extends StatefulWidget {
 }
 
 class _GrafikPageState extends State<GrafikPage> {
-  // Toggle untuk milih Pengeluaran (true) atau Pemasukan (false)
+  // Flag toggle pilihan jenis data: true = Pengeluaran, false = Pemasukan
   bool _isPengeluaran = true; 
+  // Menyimpan bulan aktif yang sedang dipilih untuk grafik
   DateTime _bulanAktif = DateTime.now();
   
-  // ALAT UNTUK SCROLL HORIZONTAL BULAN
+  // Kontroler scroll horizontal untuk navigasi list bulan di atas
   late ScrollController _scrollBulanController;
+  // Menyimpan daftar bulan-bulan untuk filter horizontal
   final List<DateTime> _listBulan = [];
 
   @override
   void initState() {
     super.initState();
     _scrollBulanController = ScrollController();
-    _siapkanDataBulan();
+    _siapkanDataBulan(); // Siapkan 12 bulan terakhir
 
-    // Auto-scroll mentok ke kanan (Bulan ini) saat halaman pertama kali dibuka
+    // Menggulung scroll navigasi bulan ke paling kanan (bulan saat ini)
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollBulanController.hasClients) {
         _scrollBulanController.jumpTo(_scrollBulanController.position.maxScrollExtent);
@@ -37,7 +36,7 @@ class _GrafikPageState extends State<GrafikPage> {
     });
   }
 
-  // Fungsi membuat daftar 12 bulan ke belakang dari hari ini
+  // Membuat daftar rentang 12 bulan ke belakang terhitung dari bulan sekarang
   void _siapkanDataBulan() {
     DateTime now = DateTime.now();
     for (int i = 11; i >= 0; i--) {
@@ -47,11 +46,11 @@ class _GrafikPageState extends State<GrafikPage> {
 
   @override
   void dispose() {
-    _scrollBulanController.dispose();
+    _scrollBulanController.dispose(); // Hapus scroll controller untuk mencegah memory leak
     super.dispose();
   }
 
-  // Helper Format Uang
+  // format rp
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -64,7 +63,7 @@ class _GrafikPageState extends State<GrafikPage> {
     return hasil;
   }
 
-  // Database warna dan ikon biar kategorinya cantik
+  // Map database warna statis untuk setiap jenis kategori agar chart bervariasi
   final Map<String, Color> _warnaKategori = {
     'Makan': const Color(0xFFEF4444),
     'Minum': const Color(0xFFF97316),
@@ -76,6 +75,7 @@ class _GrafikPageState extends State<GrafikPage> {
     'Lainnya': const Color(0xFF9CA3AF),
   };
 
+  // Map database ikon statis untuk visualisasi daftar kategori
   final Map<String, IconData> _ikonKategori = {
     'Makan': Icons.restaurant,
     'Minum': Icons.local_cafe,
@@ -93,6 +93,7 @@ class _GrafikPageState extends State<GrafikPage> {
     Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA);
     Color textColor = isDark ? Colors.white : Colors.black87;
 
+    // Batasan awal & akhir tanggal bulan aktif untuk filter query Firestore
     final startOfMonth = DateTime(_bulanAktif.year, _bulanAktif.month, 1);
     final endOfMonth = DateTime(_bulanAktif.year, _bulanAktif.month + 1, 1);
 
@@ -108,7 +109,7 @@ class _GrafikPageState extends State<GrafikPage> {
                 child: GestureDetector(
                   onTap: () {
                     setState(() {
-                      _isPengeluaran = !_isPengeluaran;
+                      _isPengeluaran = !_isPengeluaran; // Ganti filter Pengeluaran <=> Pemasukan
                     });
                   },
                   child: Row(
@@ -118,14 +119,14 @@ class _GrafikPageState extends State<GrafikPage> {
                         _isPengeluaran ? 'Pengeluaran' : 'Pemasukan',
                         style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
                       ),
-                      Icon(Icons.keyboard_arrow_down, color: textColor),
+                      Icon(Icons.keyboard_arrow_down, color: textColor), // Panah penanda dropdown klik
                     ],
                   ),
                 ),
               ),
             ),
 
-            /// 2. NAVIGASI BULAN (HORIZONTAL SCROLL SEPERTI REFERENSI)
+            /// 2. NAVIGASI PILIHAN BULAN
             Container(
               height: 50,
               decoration: BoxDecoration(
@@ -139,12 +140,9 @@ class _GrafikPageState extends State<GrafikPage> {
                   DateTime bulanItem = _listBulan[index];
                   DateTime now = DateTime.now();
                   
-                  // Cek apakah ini bulan sekarang
                   bool isBulanIni = bulanItem.year == now.year && bulanItem.month == now.month;
-                  // Cek apakah bulan ini yang sedang dipilih
                   bool isSelected = _bulanAktif.year == bulanItem.year && _bulanAktif.month == bulanItem.month;
 
-                  // Tentukan teksnya (Kalau bulan ini jadi "Bulan ini", sisanya "MMM yyyy")
                   String labelText = isBulanIni 
                       ? 'Bulan ini' 
                       : DateFormat('MMM yyyy', 'id_ID').format(bulanItem);
@@ -152,7 +150,7 @@ class _GrafikPageState extends State<GrafikPage> {
                   return GestureDetector(
                     onTap: () {
                       setState(() {
-                        _bulanAktif = bulanItem;
+                        _bulanAktif = bulanItem; // Pilih bulan aktif yang baru
                       });
                     },
                     child: Container(
@@ -160,7 +158,7 @@ class _GrafikPageState extends State<GrafikPage> {
                       decoration: BoxDecoration(
                         border: Border(
                           bottom: BorderSide(
-                            color: isSelected ? const Color(0xFFEAB308) : Colors.transparent, // Garis bawah emas ala referensi
+                            color: isSelected ? const Color(0xFFEAB308) : Colors.transparent, // Garis emas bawah penunjuk terpilih
                             width: 3,
                           ),
                         ),
@@ -170,7 +168,7 @@ class _GrafikPageState extends State<GrafikPage> {
                         labelText,
                         style: TextStyle(
                           fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                          color: isSelected ? textColor : Colors.grey, // Terang kalau dipilih, redup kalau tidak
+                          color: isSelected ? textColor : Colors.grey,
                           fontSize: 15,
                         ),
                       ),
@@ -180,7 +178,7 @@ class _GrafikPageState extends State<GrafikPage> {
               ),
             ),
 
-            /// 3. KONTEN GRAFIK (STREAM DARI FIRESTORE)
+            /// 3. KONTEN GRAFIK
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -197,23 +195,26 @@ class _GrafikPageState extends State<GrafikPage> {
 
                   final docs = snapshot.data?.docs ?? [];
                   
-                  // Hitung Total dan Kelompokkan by Kategori
+                  // Menampung total nilai transaksi dan pengelompokan berdasarkan kategori
                   double totalUang = 0;
                   Map<String, double> mapKategori = {};
 
+                  // Pengulangan data dokumen hasil query dari Firestore
                   for (var doc in docs) {
                     final data = doc.data() as Map<String, dynamic>;
                     bool isPem = data['isPemasukan'] ?? true;
                     
+                    // Filter berdasarkan tipe transaksi saat ini (Pemasukan atau Pengeluaran)
                     if (isPem == !_isPengeluaran) {
                       String kat = data['kategori'] ?? 'Lainnya';
                       double nominal = (data['nominal'] ?? 0).toDouble();
                       
-                      totalUang += nominal;
-                      mapKategori[kat] = (mapKategori[kat] ?? 0) + nominal;
+                      totalUang += nominal; // Tambahkan nominal ke total uang
+                      mapKategori[kat] = (mapKategori[kat] ?? 0) + nominal; // Kelompokkan total per kategori
                     }
                   }
 
+                  // Tampilan jika data kosong pada filter bulan aktif
                   if (totalUang == 0) {
                     return Center(
                       child: Column(
@@ -227,10 +228,11 @@ class _GrafikPageState extends State<GrafikPage> {
                     );
                   }
 
-                  // Urutkan kategori dari yang terbesar ke terkecil
+                  // Mengurutkan map kategori dari nominal terbesar ke nominal terkecil
                   var listKategori = mapKategori.entries.toList();
                   listKategori.sort((a, b) => b.value.compareTo(a.value));
 
+                  // Membuat list segmen data warna untuk PieChart (Donut Chart)
                   List<PieChartSectionData> pieSections = [];
                   int colorIndex = 0;
                   List<Color> warnaCadangan = [Colors.teal, Colors.pink, Colors.indigo, Colors.amber, Colors.cyan];
@@ -253,7 +255,7 @@ class _GrafikPageState extends State<GrafikPage> {
                       children: [
                         const SizedBox(height: 30),
                         
-                        /// BAGIAN DONUT CHART
+                        /// SEKTOR DONUT CHART (DIAGRAM LINGKARAN)
                         SizedBox(
                           height: 220,
                           child: Stack(
@@ -267,7 +269,7 @@ class _GrafikPageState extends State<GrafikPage> {
                                   startDegreeOffset: 270,
                                 ),
                               ),
-                              // Teks Total di tengah Donut
+                              // Total Teks bag. tengah
                               Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
@@ -281,7 +283,7 @@ class _GrafikPageState extends State<GrafikPage> {
                         
                         const SizedBox(height: 40),
 
-                        /// DAFTAR KATEGORI & PROGRESS BAR
+                        /// DAFTAR KATEGORI LENGKAP DENGAN PROGRES BAR PERSENTASE
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                           child: ListView.builder(
@@ -298,12 +300,14 @@ class _GrafikPageState extends State<GrafikPage> {
                                 margin: const EdgeInsets.only(bottom: 20),
                                 child: Row(
                                   children: [
+                                    // Bulatan Ikon Kategori
                                     Container(
                                       padding: const EdgeInsets.all(10),
                                       decoration: BoxDecoration(color: katColor.withOpacity(0.2), shape: BoxShape.circle),
                                       child: Icon(katIcon, color: katColor, size: 20),
                                     ),
                                     const SizedBox(width: 15),
+                                    // Bar Informasi Kategori, Persentase, dan Nominal Uang
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -322,6 +326,7 @@ class _GrafikPageState extends State<GrafikPage> {
                                             ],
                                           ),
                                           const SizedBox(height: 8),
+                                          // Bar Indikator garis Penunjuk Persentase
                                           ClipRRect(
                                             borderRadius: BorderRadius.circular(5),
                                             child: LinearProgressIndicator(

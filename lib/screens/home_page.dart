@@ -1,6 +1,3 @@
-// =========================================================
-// FILE: lib/screens/home_page.dart
-// =========================================================
 import 'grafik_page.dart'; // <--- TAMBAHKAN INI
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -10,7 +7,6 @@ import '../models/transaksi.dart';
 import '../main.dart'; 
 import 'profil_page.dart';
 import 'anggaran_page.dart';
-// Note: riwayat_page.dart sudah dihapus karena fiturnya digabung ke sini
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -20,9 +16,13 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  // Controller untuk input teks nama transaksi/judul
   final TextEditingController _judulController = TextEditingController();
+  // Controller untuk input teks nominal uang
   final TextEditingController _nominalController = TextEditingController();
+  // Index tab navigasi bawah yang sedang aktif (0: Home, 1: Grafik, 2: Anggaran, 3: Profil)
   int _pilihanTabSekarang = 0;
+  // Controller untuk mengontrol halaman/view di PageView
   late PageController _pageController;
   
   // Variabel untuk menyimpan bulan yang sedang dipilih (Default: Bulan ini)
@@ -31,9 +31,11 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    // Inisialisasi page controller sesuai tab awal
     _pageController = PageController(initialPage: _pilihanTabSekarang);
   }
 
+  // Fungsi format RP
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -65,7 +67,7 @@ class _HomePageState extends State<HomePage> {
     final endOfMonth = DateTime(_bulanAktif.year, _bulanAktif.month + 1, 1);
 
     return StreamBuilder<QuerySnapshot>(
-      // Filter transaksi berdasarkan bulan yang sedang dipilih
+      // Mengambil data transaksi pengguna ter-filter berdasarkan bulan yang dipilih secara real-time dari Firestore
       stream: FirebaseFirestore.instance
           .collection('users')
           .doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest')
@@ -77,6 +79,7 @@ class _HomePageState extends State<HomePage> {
       builder: (context, snapshot) {
 
         final docs = snapshot.data?.docs ?? [];
+        // Memetakan dokumen Firestore ke objek transaksi
         List<Transaksi> listTransaksi = docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>?;
           String waktuTampil = doc['waktu'] ?? '';
@@ -98,7 +101,7 @@ class _HomePageState extends State<HomePage> {
           );
         }).toList();
 
-        // Saldo otomatis menyesuaikan bulan yang dipilih karena datanya sudah terfilter
+        // Menghitung total saldo
         int totalPemasukan = 0;
         int totalPengeluaran = 0;
         for (var trx in listTransaksi) {
@@ -112,6 +115,7 @@ class _HomePageState extends State<HomePage> {
 
         return Scaffold(
           backgroundColor: bgColor,
+          // Tombol +
           floatingActionButton: FloatingActionButton(
             heroTag: null,
             backgroundColor: const Color(0xFF1D4ED8),
@@ -121,6 +125,7 @@ class _HomePageState extends State<HomePage> {
           ),
           floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
           floatingActionButtonAnimator: const NoAnimationFABAnimator(),
+          // Bar navigasi bagian bawah dengan notch melengkung di tengah untuk FAB
           bottomNavigationBar: BottomAppBar(
             shape: const CircularNotchedRectangle(),
             notchMargin: 8.0,
@@ -160,10 +165,12 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Fungsi untuk membangun UI konten utama pada tab Home
   Widget _buildKontenHalamanUtama(List<Transaksi> listTransaksi, int totalSaldo, int totalPemasukan, int totalPengeluaran, List<QueryDocumentSnapshot> docs, bool isDark, Color cardColor) {
     final user = FirebaseAuth.instance.currentUser;
     String namaSapaan = 'Pengguna Baru'; 
     
+    // Logika sapaan
     if (user != null && !user.isAnonymous) {
       if (user.displayName != null && user.displayName!.isNotEmpty) {
         namaSapaan = user.displayName!.split(' ')[0];
@@ -175,13 +182,11 @@ class _HomePageState extends State<HomePage> {
     }
 
     return SafeArea(
-      // KITA HAPUS SingleChildScrollView DI SINI
+      
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          /// ==========================================
-          /// BAGIAN HEADER & KARTU (TETAP DIAM DI ATAS)
-          /// ==========================================
+          // header n card
           Padding(
             padding: const EdgeInsets.all(20.0),
             child: Column(
@@ -200,57 +205,60 @@ class _HomePageState extends State<HomePage> {
                     ),
                     Row(
                       children: [
+                        // Tombol dark/light mode
                         IconButton(
                           icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode, color: isDark ? Colors.orangeAccent : Colors.grey),
                           onPressed: () {
                             themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark;
                           },
                         ),
-                        // --- LONCENG PINTAR (NOTIFIKASI) ---
-                    StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(user?.uid ?? 'guest')
-                          .collection('notifikasi')
-                          .where('isRead', isEqualTo: false) // Hanya hitung yang belum dibaca
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        int unreadCount = snapshot.data?.docs.length ?? 0;
+                        // notifikasi
+                        // Mengambil jumlah notifikasi yang belum dibaca dari database secara real-time
+                        StreamBuilder<QuerySnapshot>(
+                          stream: FirebaseFirestore.instance
+                              .collection('users')
+                              .doc(user?.uid ?? 'guest')
+                              .collection('notifikasi')
+                              .where('isRead', isEqualTo: false) // Hanya hitung yang belum dibaca
+                              .snapshots(),
+                          builder: (context, snapshot) {
+                            int unreadCount = snapshot.data?.docs.length ?? 0;
 
-                        return Stack(
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.notifications_none, size: 28),
-                              color: isDark ? Colors.white : Colors.black87,
-                              onPressed: () {
-                                _tampilLaciNotifikasi(context, isDark);
-                              },
-                            ),
-                            if (unreadCount > 0)
-                              Positioned(
-                                right: 8,
-                                top: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.all(4),
-                                  decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                                  child: Text(
-                                    unreadCount > 9 ? '9+' : '$unreadCount', 
-                                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
-                                  ),
+                            return Stack(
+                              children: [
+                                // Tombol lonceng
+                                IconButton(
+                                  icon: const Icon(Icons.notifications_none, size: 28),
+                                  color: isDark ? Colors.white : Colors.black87,
+                                  onPressed: () {
+                                    _tampilLaciNotifikasi(context, isDark);
+                                  },
                                 ),
-                              )
-                          ],
-                        );
-                      }
-                    ),
-                    // --- BATAS LONCENG ---
+                                if (unreadCount > 0)
+                                  Positioned(
+                                    right: 8,
+                                    top: 8,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(4),
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                      child: Text(
+                                        unreadCount > 9 ? '9+' : '$unreadCount', 
+                                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)
+                                      ),
+                                    ),
+                                  )
+                              ],
+                            );
+                          }
+                        ),
+                        // --- BATAS LONCENG ---
                       ],
                     ),
                   ],
                 ),
                 const SizedBox(height: 20),
 
-                // KARTU SALDO DENGAN PEMILIH BULAN MINI
+                // KARTU SALDO
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.all(20),
@@ -270,7 +278,8 @@ class _HomePageState extends State<HomePage> {
                         children: [
                           const Text('Total Saldo', style: TextStyle(color: Colors.white70, fontSize: 14)),
                           
-                          // PEMILIH BULAN MINI DI DALAM KOTAK BIRU
+
+                          // Tombol <bulan>
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                             decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
@@ -313,9 +322,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          /// ==========================================
-          /// DAFTAR TRANSAKSI (BISA SCROLL INDEPENDEN)
-          /// ==========================================
+          // transaksi
           Expanded(
             child: listTransaksi.isEmpty
                 ? const Center(
@@ -323,14 +330,15 @@ class _HomePageState extends State<HomePage> {
                   )
                 : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    // Hapus shrinkWrap dan physics agar list-nya bisa scroll sendiri
                     itemCount: listTransaksi.length,
                     itemBuilder: (context, index) {
                       final trx = listTransaksi[index];
                       final docId = docs[index].id;
 
+                      // Slide
                       return SlidableTile(
                         key: Key(docId),
+                        // Menangani aksi edit transaksi ketika digeser & diklik Edit
                         onEdit: () {
                           final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
                           final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
@@ -341,9 +349,12 @@ class _HomePageState extends State<HomePage> {
                             isPemasukanAwal: trx.isPemasukan, tanggalAwal: initialDate, kategoriAwal: trx.kategori,
                           );
                         },
+                        // Menangani aksi hapus transaksi ketika digeser & diklik Hapus
                         onDelete: () => _konfirmasiHapusTransaksi(context, docId, trx.judul),
                         child: GestureDetector(
+                          // Klik biasa pada item (edit)
                           onTap: () {
+                            
                             final rawTanggal = (docs[index].data() as Map<String, dynamic>?)?['tanggal'];
                             final DateTime initialDate = (rawTanggal != null && rawTanggal is Timestamp) 
                                 ? rawTanggal.toDate() 
@@ -405,19 +416,22 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Fungsi menampilkan bottomsheet form transaksi
   void _tampilFormTransaksi(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal, String? kategoriAwal}) {
     final bool isEditMode = docId != null;
 
     if (isEditMode) {
+      // Jika mode edit, isi form dengan data lama
       _judulController.text = judulAwal!;
       _nominalController.text = nominalAwal!.toString();
     } else {
+      // Jika mode tambah baru, bersihkan input form
       _judulController.clear();
       _nominalController.clear();
     }
     bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
     
-    // Logika Pintar: Jika nambah transaksi di bulan yang sudah lewat, kalender akan otomatis buka di bulan tersebut
+    
     DateTime now = DateTime.now();
     DateTime defaultDate = (_bulanAktif.year == now.year && _bulanAktif.month == now.month) ? now : DateTime(_bulanAktif.year, _bulanAktif.month, 1);
     DateTime tanggalTerpilih = tanggalAwal ?? defaultDate;
@@ -589,7 +603,7 @@ class _HomePageState extends State<HomePage> {
                     width: double.infinity,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF1D4ED8), padding: const EdgeInsets.symmetric(vertical: 15), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      onPressed: () async {
+                      onPressed: () async { //fungsi simpan Transaksi
                         if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
                         final dataTransaksi = {
                           'judul': _judulController.text,
@@ -630,8 +644,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Fungsi pop-up nambah kategori baru
   void _tampilDialogTambahKategori(BuildContext context, bool isPemasukan, Function(String) onKategoriDitambahkan) {
-    // ... [Isi fungsi tetap sama persis dengan yang lama] ...
     final TextEditingController kategoriController = TextEditingController();
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -668,8 +682,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Fungsi Bottomsheet untuk menampilkan daftar kategori untuk dikelola
   void _tampilBottomSheetKelolaKategori(BuildContext context, bool isPemasukan, Function(String) onKategoriTerpilih) {
-    // ... [Isi fungsi tetap sama persis dengan yang lama] ...
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -743,8 +757,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Dialog untuk mengedit nama kategori kustom di database
   void _tampilDialogEditKategori(BuildContext context, String docId, String namaLama) {
-    // ... [Isi fungsi tetap sama persis dengan yang lama] ...
     final TextEditingController controller = TextEditingController(text: namaLama);
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -779,8 +793,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Dialog konfirmasi untuk menghapus kategori kustom dari database
   void _konfirmasiHapusKategori(BuildContext context, String docId, String nama) {
-    // ... [Isi fungsi tetap sama persis dengan yang lama] ...
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
@@ -808,8 +822,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Dialog konfirmasi penghapusan catatan transaksi pribadi dari database
   void _konfirmasiHapusTransaksi(BuildContext context, String docId, String judul) {
-    // ... [Isi fungsi tetap sama persis dengan yang lama] ...
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
     showDialog(
@@ -824,7 +838,7 @@ class _HomePageState extends State<HomePage> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))),
-              onPressed: () async {
+              onPressed: () async { //fungsi del
                 final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
                 await FirebaseFirestore.instance.collection('users').doc(uid).collection('transaksi').doc(docId).delete();
                 if (context.mounted) {
@@ -840,6 +854,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Widget helper untuk menyusun informasi nominal dan label di dalam kartu saldo
   Widget _buildSaldoInfo(IconData icon, String title, String amount, Color iconColor) {
     return Row(
       children: [
@@ -850,6 +865,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  // Widget helper untuk merender setiap item/tombol menu navigasi di bagian bawah
   Widget _buildBottomNavItem(IconData icon, String title, int indexTarget) {
     final bool isSelected = _pilihanTabSekarang == indexTarget;
     return Expanded(
@@ -884,7 +900,8 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- LACI NOTIFIKASI ---
+// LACI NOTIFIKASI
+  // Fungsi Bottomsheet laci notif
   void _tampilLaciNotifikasi(BuildContext context, bool isDark) {
     showModalBottomSheet(
       context: context,
@@ -976,6 +993,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+// Animator kustom untuk FloatingActionButton agar tidak memiliki efek animasi transisi berlebih
 class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
   const NoAnimationFABAnimator();
   @override Offset getOffset({required Offset begin, required Offset end, required double progress}) => end;
@@ -983,6 +1001,7 @@ class NoAnimationFABAnimator extends FloatingActionButtonAnimator {
   @override Animation<double> getScaleAnimation({required Animation<double> parent}) => const AlwaysStoppedAnimation(1.0);
 }
 
+// Widget Stateful Custom SlidableTile untuk membungkus list item transaksi agar bisa digeser (slide)
 class SlidableTile extends StatefulWidget {
   final Widget child;
   final VoidCallback onEdit;

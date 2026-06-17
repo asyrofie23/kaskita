@@ -1,6 +1,3 @@
-// =========================================================
-// FILE: lib/screens/grup_detail_page.dart
-// =========================================================
 import 'home_page.dart' show SlidableTile;
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,9 +5,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:intl/intl.dart';
 
 class GrupDetailPage extends StatefulWidget {
-  final String kodeGrup;
-  final String namaGrup;
-  final String roleUser;
+  final String kodeGrup;  // sebagai ID dokumen Firestore
+  final String namaGrup;  // Nama representasi grup kas
+  final String roleUser;  // Peran user aktif di dalam grup (Admin / Editor / Spectator)
 
   const GrupDetailPage({
     super.key,
@@ -24,9 +21,11 @@ class GrupDetailPage extends StatefulWidget {
 }
 
 class _GrupDetailPageState extends State<GrupDetailPage> {
+  // Controller untuk menangani input form transaksi grup
   final TextEditingController _judulController = TextEditingController();
   final TextEditingController _nominalController = TextEditingController();
 
+  // format Rp
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -45,23 +44,24 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
     Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA);
     Color cardColor = isDark ? const Color(0xFF1E293B) : Colors.white;
 
-    // Cek apakah user punya hak untuk menambah/mengedit catatan
+    // Cek apakah user punya hak untuk menambah/mengedit catatan kas grup (Spectator dilarang)
     bool bisaEdit = widget.roleUser == 'Admin' || widget.roleUser == 'Editor';
     bool isAdmin = widget.roleUser == 'Admin';
 
     return Scaffold(
       backgroundColor: bgColor,
       appBar: AppBar(
-        // KITA BUNGKUS JUDUL DENGAN STREAM BIAR NAMANYA REAL-TIME KALAU DIUBAH
+        // StreamBuilder memantau data dokumen grup untuk memperbarui nama grup secara realtime
         title: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).snapshots(),
           builder: (context, snapshot) {
             String namaTampil = widget.namaGrup;
             if (snapshot.hasData && snapshot.data!.data() != null) {
               final data = snapshot.data!.data() as Map<String, dynamic>;
-              namaTampil = data['nama_grup'] ?? widget.namaGrup;
+              namaTampil = data['nama_grup'] ?? widget.namaGrup; // Gunakan nama ter-update dari database
             }
 
+            // Jika Admin mengklik judul AppBar, buka dialog ubah nama grup
             return GestureDetector(
               onTap: isAdmin ? () => _tampilDialogUbahNamaGrup(context, namaTampil, isDark) : () {
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Hanya Admin yang bisa mengubah nama grup.')));
@@ -89,6 +89,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
         elevation: 0,
         iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black87),
         actions: [
+          // Tombol member view
           IconButton(
             icon: const Icon(Icons.group_outlined),
             onPressed: () {
@@ -97,12 +98,13 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           )
         ],
       ),
+      // StreamBuilder memantau list sub-koleksi transaksi grup kas secara realtime
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance
             .collection('grup_kas')
             .doc(widget.kodeGrup)
             .collection('transaksi')
-            .orderBy('tanggal', descending: true)
+            .orderBy('tanggal', descending: true) // Urutkan transaksi terbaru di atas
             .snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
@@ -111,6 +113,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
 
           final docs = snapshot.data?.docs ?? [];
           
+          // Akumulasi data nominal masuk dan keluar untuk menghitung total saldo kas bersamamu
           int totalPemasukan = 0;
           int totalPengeluaran = 0;
           for (var doc in docs) {
@@ -124,13 +127,10 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           }
           int totalSaldo = totalPemasukan - totalPengeluaran;
 
-          // HAPUS SingleChildScrollView, GANTI JADI Column
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              /// ==========================================
-              /// BAGIAN HEADER & KARTU (TETAP DIAM DI ATAS)
-              /// ==========================================
+              // header card
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
@@ -154,6 +154,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                           const SizedBox(height: 10),
                           Text('Rp ${_formatUang(totalSaldo)}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                           const SizedBox(height: 25),
+                          // Sub info baris: pemasukan (iuran) vs pengeluaran kas
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -170,17 +171,14 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                 ),
               ),
 
-              /// ==========================================
-              /// DAFTAR TRANSAKSI (BISA SCROLL INDEPENDEN)
-              /// ==========================================
+              // riwayat catatan
               Expanded(
                 child: docs.isEmpty
                     ? const Center(
                         child: Text('Belum ada iuran atau pengeluaran di grup ini.', style: TextStyle(color: Colors.grey)),
                       )
                     : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 20), // Tambah padding kiri kanan
-                        // Hapus shrinkWrap dan physics
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
                         itemCount: docs.length,
                         itemBuilder: (context, index) {
                           final doc = docs[index];
@@ -196,6 +194,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                             waktuTampil = DateFormat('dd MMM yyyy, HH:mm').format((data['tanggal'] as Timestamp).toDate());
                           }
 
+                          // Kontainer dasar kartu item transaksi
                           Widget kontenTransaksi = Container(
                             margin: const EdgeInsets.only(bottom: 10),
                             padding: const EdgeInsets.all(15),
@@ -206,12 +205,14 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                             ),
                             child: Row(
                               children: [
+                                // Ikon jenis kas (Masuk hijau / Keluar merah)
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: BoxDecoration(color: isPemasukan ? Colors.green.withOpacity(0.15) : Colors.red.withOpacity(0.15), shape: BoxShape.circle),
                                   child: Icon(isPemasukan ? Icons.arrow_downward : Icons.arrow_upward, color: isPemasukan ? Colors.green : Colors.red),
                                 ),
                                 const SizedBox(width: 15),
+                                // Judul dan Nama pencatat kas
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -222,6 +223,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                                     ],
                                   ),
                                 ),
+                                // Nominal Rupiah & Waktu
                                 Column(
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
@@ -234,13 +236,14 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                             ),
                           );
 
+                          // Jika role user diizinkan mengedit/menghapus, bungkus dengan SlidableTile (Slide kanan/kiri edit hapus)
                           if (bisaEdit) {
                             DateTime tanggalAsli = DateTime.now();
                             if (data['tanggal'] != null && data['tanggal'] is Timestamp) {
                               tanggalAsli = (data['tanggal'] as Timestamp).toDate();
                             }
 
-                            return SlidableTile(
+                            return SlidableTile( // slide
                               key: Key(docId),
                               onEdit: () => _tampilFormTransaksiGrup(context, docId: docId, judulAwal: judul, nominalAwal: nominal, isPemasukanAwal: isPemasukan, tanggalAwal: tanggalAsli),
                               onDelete: () => _konfirmasiHapusTransaksiGrup(context, docId, judul),
@@ -255,7 +258,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           );
         },
       ),
-      
+      // Tombol + mengambang untuk menambah
       floatingActionButton: bisaEdit ? FloatingActionButton(
         backgroundColor: const Color(0xFF1D4ED8),
         onPressed: () => _tampilFormTransaksiGrup(context),
@@ -274,13 +277,14 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
     );
   }
 
-
-  // --- FORM TAMBAH & EDIT TRANSAKSI GRUP ---
+  //tambah n edit
+  // bottomsheet tambah catatan
   void _tampilFormTransaksiGrup(BuildContext context, {String? docId, String? judulAwal, int? nominalAwal, bool? isPemasukanAwal, DateTime? tanggalAwal}) {
-    final bool isEditMode = docId != null;
+    final bool isEditMode = docId != null; // Status mode edit data vs tambah baru
     bool isPemasukanTerpilih = isEditMode ? isPemasukanAwal! : true;
-    DateTime tanggalTerpilih = tanggalAwal ?? DateTime.now(); // <--- Variabel tanggal
+    DateTime tanggalTerpilih = tanggalAwal ?? DateTime.now(); // Default tanggal hari ini
     
+    // Set teks awal textfield jika sedang mengedit dokumen
     if (isEditMode) {
       _judulController.text = judulAwal!;
       _nominalController.text = nominalAwal!.toString();
@@ -302,10 +306,11 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start, // Rata kiri biar rapi
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Center(child: Text(isEditMode ? 'Edit Transaksi Grup' : 'Tambah Transaksi Grup', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18))),
                     const SizedBox(height: 15),
+                    // Pilihan jenis kas (Iuran masuk vs Pengeluaran keluar) menggunakan ChoiceChip
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -327,16 +332,18 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                     const SizedBox(height: 15),
                     const Text('Judul Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 8),
+                    // TextField input Judul Transaksi
                     TextField(controller: _judulController, decoration: InputDecoration(hintText: 'Misal: Iuran Kas / Beli Galon', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                     const SizedBox(height: 15),
                     const Text('Nominal (Rp)', style: TextStyle(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 8),
+                    // TextField input Nominal rupiah angka
                     TextField(controller: _nominalController, keyboardType: TextInputType.number, decoration: InputDecoration(prefixText: 'Rp ', hintText: '0', border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)))),
                     const SizedBox(height: 15),
                     
-                    // --- UI KALENDER YANG SEMPAT HILANG ---
                     const Text('Tanggal Transaksi', style: TextStyle(fontWeight: FontWeight.w500)),
                     const SizedBox(height: 8),
+                    // Tombol pengetuk kalender
                     InkWell(
                       onTap: () async {
                         final DateTime? picked = await showDatePicker(
@@ -370,9 +377,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         ),
                       ),
                     ),
-                    // --- BATAS UI KALENDER ---
 
                     const SizedBox(height: 25),
+                    // Tombol Simpan
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -380,11 +387,13 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         onPressed: () async {
                           if (_judulController.text.isEmpty || _nominalController.text.isEmpty) return;
                           
+                          // Referensi sub-koleksi transaksi di dalam grup kas bersangkutan
                           final grupRef = FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).collection('transaksi');
                           final user = FirebaseAuth.instance.currentUser;
                           String namaPembuat = user?.displayName ?? user?.email?.split('@')[0] ?? 'Anggota';
 
                           if (isEditMode) {
+                            // Update dokumen transaksi lama
                             await grupRef.doc(docId).update({
                               'judul': _judulController.text,
                               'nominal': int.parse(_nominalController.text),
@@ -392,6 +401,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                               'tanggal': Timestamp.fromDate(tanggalTerpilih), 
                             });
                           } else {
+                            // Tambah dokumen transaksi baru
                             await grupRef.add({
                               'judul': _judulController.text,
                               'nominal': int.parse(_nominalController.text),
@@ -402,22 +412,20 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                             });
                           }
 
-                          // ==========================================
-                          // MESIN PENGIRIM NOTIFIKASI KE ANGGOTA LAIN
-                          // ==========================================
+                          // mesin notif
                           try {
                             final grupDoc = await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).get();
                             if (grupDoc.exists) {
                               List<dynamic> idAnggota = grupDoc.data()?['id_anggota'] ?? [];
                               
                               for (String targetUid in idAnggota) {
-                                // Jangan kirim notif ke diri sendiri
+                                // Kirim notif ke semua anggota lain kecuali pembuat itu sendiri
                                 if (targetUid != user?.uid) {
                                   await FirebaseFirestore.instance.collection('users').doc(targetUid).collection('notifikasi').add({
                                     'judul': isEditMode ? 'Catatan Diedit' : 'Catatan Baru',
                                     'pesan': '$namaPembuat ${isEditMode ? 'mengedit' : 'menambahkan'} transaksi "${_judulController.text}" di grup ${widget.namaGrup}.',
                                     'waktu': FieldValue.serverTimestamp(),
-                                    'isRead': false, // Penanda belum dibaca (titik merah)
+                                    'isRead': false, // Titik merah tanda belum dibaca
                                   });
                                 }
                               }
@@ -443,7 +451,8 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
     );
   }
 
-  // --- POP-UP DAFTAR ANGGOTA GRUP ---
+  // POP-UP DAFTAR ANGGOTA GRUP
+  // Fungsi untuk menampilkan dialog Bottom Sheet berisi daftar anggota grup kas beserta perannya
   void _tampilDaftarAnggota(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
     final Color sheetBgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
@@ -461,6 +470,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
           ),
           child: StreamBuilder<DocumentSnapshot>(
+            // Stream data grup kas secara real-time dari Firestore
             stream: FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).snapshots(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
@@ -473,8 +483,8 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               }
 
               final Map<String, dynamic> anggotaMap = data['anggota'];
-              final String myRole = anggotaMap[myUid] ?? 'Anggota'; // Cek role diri sendiri
-              final bool isAdmin = myRole == 'Admin'; // Cek apakah aku admin
+              final String myRole = anggotaMap[myUid] ?? 'Anggota'; // Mengambil role pengguna aktif saat ini
+              final bool isAdmin = myRole == 'Admin'; // Cek apakah pengguna saat ini berstatus Admin grup
 
               return SingleChildScrollView(
                 child: Column(
@@ -508,7 +518,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         String roleAnggota = anggotaMap[uidAnggota];
                         bool isMe = uidAnggota == myUid;
                         
-                        // Ambil nama dari database (kalau grup lama belum ada datanya, pakai default)
+                        // Ambil nama asli anggota dari field nama_anggota jika tersedia
                         final Map<String, dynamic> namaMap = data.containsKey('nama_anggota') ? data['nama_anggota'] : {};
                         String namaAsli = namaMap[uidAnggota] ?? 'Anggota Tim';
 
@@ -523,7 +533,6 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                               color: roleAnggota == 'Admin' ? Colors.blueAccent : Colors.grey,
                             ),
                           ),
-                          // NAMA SEKARANG MUNCUL DI SINI
                           title: Text(
                             isMe ? '$namaAsli (Kamu)' : namaAsli, 
                             style: const TextStyle(fontWeight: FontWeight.bold)
@@ -545,20 +554,21 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)
                             ),
                           ),
-                          // KABEL UNTUK UBAH JABATAN & KICK
+                          // Jika kita admin dan bukan menekan nama sendiri, ketuk untuk ubah jabatan atau keluarkan
                           onTap: (isAdmin && !isMe) ? () {
-                            _tampilDialogUbahRole(context, uidAnggota, roleAnggota, namaAsli, isDark); // <--- Tambah lemparan namaAsli
+                            _tampilDialogUbahRole(context, uidAnggota, roleAnggota, namaAsli, isDark);
                           } : null,
                         );
                       },
                     ),
                     const SizedBox(height: 10),
                     
-                    // --- TAMBAHAN TOMBOL HAPUS GRUP (MUNCUL JIKA ADMIN) ---
+                    // TOMBOL HAPUS GRUP
                     if (isAdmin) ...[
                       Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
                       SizedBox(
                         width: double.infinity,
+                        // Tombol bagi Admin untuk menghapus grup ini secara keseluruhan
                         child: TextButton.icon(
                           style: TextButton.styleFrom(
                             foregroundColor: Colors.red,
@@ -567,8 +577,8 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                           icon: const Icon(Icons.delete_forever),
                           label: const Text('Hapus Grup Ini', style: TextStyle(fontWeight: FontWeight.bold)),
                           onPressed: () {
-                            Navigator.pop(context); // Tutup daftar anggota dulu
-                            _konfirmasiHapusGrup(context); // Panggil dialog kiamat
+                            Navigator.pop(context); // Tutup bottom sheet
+                            _konfirmasiHapusGrup(context); // Buka dialog konfirmasi penghapusan grup
                           },
                         ),
                       ),
@@ -584,7 +594,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
       },
     );
   }
-// --- FUNGSI HAPUS GRUP (KHUSUS ADMIN) ---
+
+  // FUNGSI HAPUS GRUP
+  // Menampilkan dialog konfirmasi penghapusan grup secara permanen
   void _konfirmasiHapusGrup(BuildContext context) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -603,33 +615,29 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
             ElevatedButton(
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+              // Tombol untuk eksekusi penghapusan grup kas dan sub-koleksi transaksi
               onPressed: () async {
-                // 1. Tutup dialog pop-up konfirmasi
-                Navigator.pop(context);
+                Navigator.pop(context); // Tutup dialog konfirmasi
 
                 try {
                   final grupRef = FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup);
                   
-                  // 2. Ambil semua data transaksi di dalam sub-folder grup ini
+                  // Ambil seluruh dokumen transaksi di dalam grup kas bersangkutan
                   final trxSnap = await grupRef.collection('transaksi').get();
                   
-                  // 3. Siapkan "Sapu Jagat" (Batch Delete) dari Firestore
+                  // Gunakan WriteBatch agar proses penghapusan semua transaksi dan dokumen grup berjalan sekaligus
                   final batch = FirebaseFirestore.instance.batch();
                   
-                  // Sapu bersih semua dokumen transaksi
                   for (var doc in trxSnap.docs) {
-                    batch.delete(doc.reference);
+                    batch.delete(doc.reference); // Tambahkan penghapusan transaksi ke batch
                   }
                   
-                  // Sapu bersih folder utama grupnya
-                  batch.delete(grupRef);
+                  batch.delete(grupRef); // Tambahkan penghapusan dokumen grup ke batch
                   
-                  // 4. Eksekusi sapu jagatnya sekarang!
-                  await batch.commit();
+                  await batch.commit(); // Jalankan transaksi batch Firestore
 
                   if (context.mounted) {
-                    // 5. Tendang user keluar dari halaman detail grup kembali ke Profil
-                    Navigator.pop(context);
+                    Navigator.pop(context); // Keluar dari halaman grup detail kembali ke Profil
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Grup berhasil dihapus permanen!'), backgroundColor: Colors.red));
                   }
                 } catch(e) {
@@ -643,7 +651,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
       }
     );
   }
-  // --- POP-UP UBAH PERAN & KICK ANGGOTA ---
+
+  // POP-UP UBAH PERAN & KICK ANGGOTA
+  // Dialog bagi admin untuk mengelola peran (Editor/Spectator) atau mengeluarkan anggota dari grup
   void _tampilDialogUbahRole(BuildContext context, String uidTarget, String roleSekarang, String namaAnggota, bool isDark) {
     showDialog(
       context: context,
@@ -655,6 +665,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
+              // Pilihan untuk mengubah peran menjadi Editor (bisa tulis/baca)
               ListTile(
                 leading: const Icon(Icons.edit_note, color: Colors.green),
                 title: Text('Jadikan Editor', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
@@ -662,6 +673,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                 trailing: roleSekarang == 'Editor' ? const Icon(Icons.check_circle, color: Colors.green) : null,
                 onTap: () async {
                   Navigator.pop(context); 
+                  // Update nilai field role anggota di Firestore
                   await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
                     'anggota.$uidTarget': 'Editor'
                   });
@@ -669,6 +681,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                 },
               ),
               Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
+              // Pilihan untuk mengubah peran menjadi Spectator (hanya bisa lihat)
               ListTile(
                 leading: const Icon(Icons.visibility, color: Colors.orange),
                 title: Text('Jadikan Spectator', style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold)),
@@ -676,6 +689,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                 trailing: roleSekarang == 'Spectator' ? const Icon(Icons.check_circle, color: Colors.orange) : null,
                 onTap: () async {
                   Navigator.pop(context); 
+                  // Update nilai field role anggota di Firestore
                   await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
                     'anggota.$uidTarget': 'Spectator'
                   });
@@ -684,15 +698,15 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               ),
               Divider(color: isDark ? Colors.white24 : Colors.grey.shade200),
               
-              // FITUR KICK (MENGHAPUS DARI DATABASE)
+              // FITUR KICK
               ListTile(
                 leading: const Icon(Icons.person_remove, color: Colors.red),
                 title: const Text('Keluarkan dari Grup', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
                 subtitle: const Text('Hapus anggota ini secara permanen.', style: TextStyle(fontSize: 12)),
                 onTap: () {
-                  Navigator.pop(context); // Tutup menu pilihan
+                  Navigator.pop(context); // Tutup dialog opsi peran
                   
-                  // Munculkan konfirmasi terakhir biar ga salah pencet
+                  // Tampilkan dialog konfirmasi penghapusan (kick) kedua agar tidak salah pencet
                   showDialog(
                     context: context,
                     builder: (context) => AlertDialog(
@@ -704,7 +718,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                         ElevatedButton(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                           onPressed: () async {
-                            // Hapus UID-nya dari 3 tempat sekaligus dengan jurus FieldValue.delete()
+                            // Hapus UID anggota dari anggotaMap, nama_anggota, dan list id_anggota di Firestore
                             await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
                               'anggota.$uidTarget': FieldValue.delete(),
                               'nama_anggota.$uidTarget': FieldValue.delete(), 
@@ -712,7 +726,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                             });
                             
                             if (context.mounted) {
-                              Navigator.pop(context);
+                              Navigator.pop(context); // Tutup dialog konfirmasi
                               ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$namaAnggota berhasil dikeluarkan'), backgroundColor: Colors.red));
                             }
                           },
@@ -729,7 +743,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
       },
     );
   }
-  // --- FUNGSI HAPUS TRANSAKSI GRUP ---
+
+  // FUNGSI HAPUS TRANSAKSI GRUP
+  // Dialog konfirmasi untuk menghapus satu catatan transaksi dalam grup kas
   void _konfirmasiHapusTransaksiGrup(BuildContext context, String docId, String judul) {
     final bool isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -756,6 +772,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.redAccent,
               ),
+              // Eksekusi penghapusan dokumen transaksi dari Firestore
               onPressed: () async {
                 await FirebaseFirestore.instance
                     .collection('grup_kas')
@@ -765,7 +782,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                     .delete();
                     
                 if (context.mounted) {
-                  Navigator.pop(context);
+                  Navigator.pop(context); // Tutup dialog
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Transaksi grup dihapus'), backgroundColor: Colors.red));
                 }
               },
@@ -776,7 +793,9 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
       },
     );
   }
-  // --- POP-UP UBAH NAMA GRUP (KHUSUS ADMIN) ---
+
+  // POP-UP UBAH NAMA GRUP
+  // Menampilkan dialog input untuk mengubah nama grup kas di Firestore
   void _tampilDialogUbahNamaGrup(BuildContext context, String namaSekarang, bool isDark) {
     final TextEditingController controller = TextEditingController(text: namaSekarang);
     bool isLoading = false;
@@ -804,6 +823,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                 TextButton(onPressed: () => Navigator.pop(context), child: const Text('Batal')),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF2563EB)),
+                  // Tombol simpan untuk mengirim nama grup baru ke Firestore
                   onPressed: isLoading ? null : () async {
                     final String namaBaru = controller.text.trim();
                     if (namaBaru.isEmpty || namaBaru == namaSekarang) return;
@@ -811,6 +831,7 @@ class _GrupDetailPageState extends State<GrupDetailPage> {
                     setDialogState(() => isLoading = true);
 
                     try {
+                      // Update field nama_grup di database
                       await FirebaseFirestore.instance.collection('grup_kas').doc(widget.kodeGrup).update({
                         'nama_grup': namaBaru
                       });

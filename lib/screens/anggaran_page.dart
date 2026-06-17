@@ -1,14 +1,12 @@
-// =========================================================
-// FILE: lib/screens/anggaran_page.dart
-// =========================================================
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/transaksi.dart';
 import '../models/anggaran.dart';
 
+
 class AnggaranPage extends StatefulWidget {
-  // Kita butuh data transaksi untuk menghitung "Terpakai" otomatis
+
   final List<Transaksi> semuaTransaksi;
 
   const AnggaranPage({super.key, required this.semuaTransaksi});
@@ -18,6 +16,7 @@ class AnggaranPage extends StatefulWidget {
 }
 
 class _AnggaranPageState extends State<AnggaranPage> {
+  // Format Rp
   String _formatUang(int angka) {
     String str = angka.toString();
     String hasil = '';
@@ -30,12 +29,13 @@ class _AnggaranPageState extends State<AnggaranPage> {
     return hasil;
   }
 
-  // Fungsi untuk menghitung berapa uang yang sudah terpakai di kategori tertentu
+  // Menghitung jumlah uang yang telah dibelanjakan
   int _hitungTerpakai(String kategori) {
     int total = 0;
     for (var trx in widget.semuaTransaksi) {
-      // Hanya hitung pengeluaran
+      // Hanya menghitung transaksi pengeluaran
       if (!trx.isPemasukan) {
+        // Hitung jika kategori cocok atau jika batas anggaran diset untuk "Semua Kategori"
         if (kategori == 'Semua Kategori' || trx.kategori == kategori) {
           total += trx.nominal;
         }
@@ -44,6 +44,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
     return total;
   }
 
+  // Dialog Konfirmasi sebelum menghapus data anggaran
   void _konfirmasiHapusAnggaran(BuildContext context, String id) {
     showDialog(
       context: context,
@@ -52,15 +53,18 @@ class _AnggaranPageState extends State<AnggaranPage> {
           title: const Text('Hapus Batas Anggaran'),
           content: const Text('Apakah Anda yakin ingin menghapus batas anggaran ini?'),
           actions: [
+            
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Batal'),
             ),
+            // Tombol konfirmasi hapus
             TextButton(
               onPressed: () async {
-                Navigator.pop(context); // Close dialog
+                Navigator.pop(context); // Tutup dialog konfirmasi
                 final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
                 try {
+                  // Hapus dokumen berdasarkan ID dari sub-koleksi anggaran user
                   await FirebaseFirestore.instance
                       .collection('users')
                       .doc(uid)
@@ -91,27 +95,29 @@ class _AnggaranPageState extends State<AnggaranPage> {
   @override
   Widget build(BuildContext context) {
     bool isDark = Theme.of(context).brightness == Brightness.dark;
-    Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA); // Warna bg menyesuaikan gambar
+    Color bgColor = isDark ? const Color(0xFF0F172A) : const Color(0xFFF8F9FA); // Background halaman
     Color cardColor = isDark ? const Color(0xFF1E293B) : Colors.white;
 
     return Scaffold(
       backgroundColor: bgColor,
+      // AppBar di bagian atas halaman
       appBar: AppBar(
         title: const Text('Batas Anggaran', style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: bgColor,
         foregroundColor: isDark ? Colors.white : Colors.black,
         elevation: 0,
       ),
+      // StreamBuilder untuk membaca database Firestore secara realtime
       body: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid ?? 'guest').collection('anggaran').snapshots(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(child: CircularProgressIndicator()); // Loading at waiting data
           }
 
           final docs = snapshot.data?.docs ?? [];
 
-          // TAMPILAN KOSONG (Gambar Pertama)
+          // TAMPILAN KOSONG
           if (docs.isEmpty) {
             return Center(
               child: Column(
@@ -121,6 +127,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                   const SizedBox(height: 15),
                   const Text('Belum ada batas anggaran dibuat', style: TextStyle(color: Colors.grey, fontSize: 16)),
                   const SizedBox(height: 25),
+                  // Tombol buat batasan "awal"
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF1D4ED8),
@@ -135,12 +142,13 @@ class _AnggaranPageState extends State<AnggaranPage> {
             );
           }
 
-          // TAMPILAN JIKA ADA ANGGARAN (Gambar Ketiga)
+          // TAMPILAN UTAMA - jika data anggaran tersedia di Firestore
           return ListView.builder(
             padding: const EdgeInsets.all(20),
             itemCount: docs.length,
             itemBuilder: (context, index) {
               final data = docs[index].data() as Map<String, dynamic>;
+              // Membungkus data map dari Firestore menjadi model class Anggaran
               final anggaran = Anggaran(
                 id: docs[index].id,
                 nama: data['nama'] ?? '',
@@ -151,15 +159,15 @@ class _AnggaranPageState extends State<AnggaranPage> {
                 rollover: data['rollover'] ?? false,
               );
 
-              // Hitung matematis progres
+              // Menghitung data keuangan yang terpakai dan sisa limit anggaran
               int terpakai = _hitungTerpakai(anggaran.kategori);
               int sisa = anggaran.limit - terpakai;
-              double persenTerpakai = (terpakai / anggaran.limit).clamp(0.0, 1.0); // clamp biar gak tembus 100% di UI
+              double persenTerpakai = (terpakai / anggaran.limit).clamp(0.0, 1.0); // Membatasi nilai persen maksimal 1.0 (100%)
 
-              // Tentukan warna bar (kalau udah lewat limit merah, kalau belum biru/hijau)
+              // Logika warna bar indikator progres sesuai persentase terpakai
               Color barColor = persenTerpakai >= 1.0 
-                  ? Colors.red 
-                  : (persenTerpakai >= (anggaran.peringatan / 100) ? Colors.orange : const Color(0xFF2563EB));
+                  ? Colors.red
+                  : (persenTerpakai >= (anggaran.peringatan / 100) ? Colors.orange : const Color(0xFF2563EB)); // Jingga/Biru jika aman
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 15),
@@ -172,6 +180,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Baris Header Kartu (Berisi Nama Anggaran, Kategori, dan Tombol Menu Opsi)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,14 +195,17 @@ class _AnggaranPageState extends State<AnggaranPage> {
                             ],
                           ),
                         ),
+                        // Menu 3 Titik
                         PopupMenuButton<String>(
                           icon: const Icon(Icons.more_vert, size: 20),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onSelected: (value) {
                             if (value == 'edit') {
+                              // edit
                               _tampilFormAnggaran(context, isDark, anggaranYangDiedit: anggaran);
                             } else if (value == 'hapus') {
+                              // hapus
                               _konfirmasiHapusAnggaran(context, anggaran.id);
                             }
                           },
@@ -223,6 +235,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                       ],
                     ),
                     const SizedBox(height: 15),
+                    // Informasi angka nominal
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -242,6 +255,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                       ),
                     ),
                     const SizedBox(height: 10),
+                    // persentase
                     Text(
                       '${(persenTerpakai * 100).toStringAsFixed(0)}% terpakai dari Rp ${_formatUang(anggaran.limit)}',
                       style: const TextStyle(color: Colors.grey, fontSize: 12),
@@ -253,7 +267,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
           );
         },
       ),
-      // Tombol Plus Mengambang di kanan bawah
+      // Tombol +
       floatingActionButton: StreamBuilder<QuerySnapshot>(
         stream: FirebaseFirestore.instance.collection('users').doc(FirebaseAuth.instance.currentUser?.uid).collection('anggaran').snapshots(),
         builder: (context, snapshot) {
@@ -265,14 +279,15 @@ class _AnggaranPageState extends State<AnggaranPage> {
               child: const Icon(Icons.add, color: Colors.white),
             );
           }
-          return const SizedBox.shrink(); // Sembunyikan kalau masih kosong (karena udah ada tombol gede di tengah)
+          return const SizedBox.shrink(); // Sembunyikan jika kosong
         },
       ),
     );
   }
 
-  // FORM BOTTOM SHEET (Gambar Kedua)
+  // BOTTOM SHEET FORM - Untuk menambah atau mengedit data batas anggaran
   void _tampilFormAnggaran(BuildContext context, bool isDark, {Anggaran? anggaranYangDiedit}) {
+    // Inisialisasi controller textfield dengan data lama (jika edit) atau kosong (jika buat baru)
     final TextEditingController namaController = TextEditingController(text: anggaranYangDiedit?.nama ?? '');
     final TextEditingController limitController = TextEditingController(
         text: anggaranYangDiedit != null ? anggaranYangDiedit.limit.toString() : '');
@@ -281,7 +296,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
     double nilaiPeringatan = anggaranYangDiedit?.peringatan ?? 80.0;
     bool isRollover = anggaranYangDiedit?.rollover ?? false;
 
-    // List kategori statis (Bisa diganti dinamis nanti)
+    // Daftar pilihan kategori anggaran
     List<String> listKategori = ['Semua Kategori', 'Makan', 'Transportasi', 'Hiburan', 'Belanja'];
 
     showModalBottomSheet(
@@ -294,7 +309,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
           builder: (context, setSheetState) {
             return Padding(
               padding: EdgeInsets.only(
-                bottom: MediaQuery.of(context).viewInsets.bottom,
+                bottom: MediaQuery.of(context).viewInsets.bottom, // Mengangkat sheet saat keyboard muncul
                 left: 20, right: 20, top: 20,
               ),
               child: SingleChildScrollView(
@@ -302,6 +317,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Tombol Back dan Judul Form
                     Row(
                       children: [
                         IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
@@ -310,18 +326,18 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 15),
 
-                    // Input Nama Anggaran
+                    // Input TextField Nama Anggaran
                     TextField(
                       controller: namaController,
                       decoration: InputDecoration(
                         prefixIcon: const Icon(Icons.pie_chart_outline),
-                        hintText: 'Nama Anggaran (misal: Bulanan Makan)',
+                        hintText: 'Nama Anggaran',
                         border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                       ),
                     ),
                     const SizedBox(height: 15),
 
-                    // Input Limit
+                    // Input TextField Nominal Uang Limit
                     TextField(
                       controller: limitController,
                       keyboardType: TextInputType.number,
@@ -333,7 +349,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 15),
 
-                    // Kategori
+                    // Pilihan Dropdown Kategori Pengeluaran
                     const Text('Kategori Pengeluaran', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 5),
                     DropdownButtonFormField<String>(
@@ -347,7 +363,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 15),
 
-                    // Periode
+                    // Pilihan Dropdown Periode Anggaran (Bulanan / Mingguan)
                     const Text('Periode Anggaran', style: TextStyle(fontSize: 12, color: Colors.grey)),
                     const SizedBox(height: 5),
                     DropdownButtonFormField<String>(
@@ -361,7 +377,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Peringatan Limit (Slider)
+                    // Slider untuk menetapkan persentase Peringatan Limit
                     Container(
                       padding: const EdgeInsets.all(15),
                       decoration: BoxDecoration(
@@ -387,7 +403,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Rollover Switch
+                    // Switch Rollover Sisa Anggaran (apakah memindahkan sisa uang ke periode berikutnya)
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -410,7 +426,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                     ),
                     const SizedBox(height: 25),
 
-                    // Tombol Simpan
+                    // Tombol Simpan Aksi Form (Dinamis: Simpan Perubahan / Buat Anggaran)
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
@@ -422,7 +438,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                         onPressed: () async {
                           if (namaController.text.isEmpty || limitController.text.isEmpty) return;
 
-                          // Simpan ke Firestore
+                          // Ambil UID user aktif untuk path database Firestore
                           final String uid = FirebaseAuth.instance.currentUser?.uid ?? 'guest';
                           final data = {
                             'nama': namaController.text,
@@ -434,6 +450,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                           };
 
                           if (anggaranYangDiedit != null) {
+                            // Update dokumen anggaran yang sudah ada
                             await FirebaseFirestore.instance
                                 .collection('users')
                                 .doc(uid)
@@ -441,6 +458,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                                 .doc(anggaranYangDiedit.id)
                                 .update(data);
                           } else {
+                            // Buat dokumen anggaran baru dan set waktu pembuatan
                             data['createdAt'] = FieldValue.serverTimestamp();
                             await FirebaseFirestore.instance
                                 .collection('users')
@@ -450,7 +468,7 @@ class _AnggaranPageState extends State<AnggaranPage> {
                           }
 
                           if (context.mounted) {
-                            Navigator.pop(context);
+                            Navigator.pop(context); // Tutup bottom sheet form setelah selesai disimpan
                           }
                         },
                         child: Text(anggaranYangDiedit != null ? 'Simpan Perubahan' : 'Buat Anggaran', style: const TextStyle(color: Colors.white, fontSize: 16)),
